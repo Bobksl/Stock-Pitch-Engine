@@ -1,0 +1,25 @@
+# Equity Filings RAG — pinned dependencies (Python 3.13, CPU-only)
+# LLM client (DeepSeek is OpenAI-SDK compatible: base_url=https://api.deepseek.com)
+openai>=1.60
+
+# Local embeddings (BAAI/bge-m3, 1024-dim, CPU with fp16)
+sentence-transformers>=3.3
+
+# PostgreSQL + pgvector
+psycopg[binary]>=3.2
+pgvector>=0.3
+
+# PDF ingestion / OCR
+pdfplumber>=0.11
+pypdf>=5.0
+pdf2image>=1.17          # requires poppler binaries on PATH (see SETUP.md)
+pytesseract>=0.3.13      # requires Tesseract binary + chi_tra pack (see SETUP.md)
+
+# Chunking / token counting
+tiktoken>=0.8
+
+# UI
+streamlit>=1.40
+
+# Config
+python-dotenv>=1.0

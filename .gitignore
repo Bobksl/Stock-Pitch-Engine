@@ -1,0 +1,20 @@
+# Secrets — never commit the real key
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data — filings are large and HKEX ToU-restricted; keep them local only
+sample_pdfs/*.pdf
+*.pdf
+
+# Model caches / artifacts
+.cache/
+*.log
+
+# OS / editor
+Thumbs.db
+.DS_Store
