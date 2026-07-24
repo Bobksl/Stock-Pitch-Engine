@@ -1,20 +1,19 @@
 """Module 5 — Section summaries + YoY change alerts.
 
 summarize_sections(doc_id): for every detected section (except 'Other'), summarize its
-page text with deepseek-v4-flash -> summaries table; also writes one 'new_filing' alert.
+page text with the configured LLM -> summaries table; also writes one 'new_filing' alert.
 
 detect_changes(ticker, year_a, year_b): for each section TYPE present in both years,
 compare the two years' summaries -> 'change_detected' alerts rows anchored to the
-newer doc's section (doc_id / section_id / page_ref all set, per the JD's
-"every alert links back to source" requirement).
+newer doc's section (doc_id / section_id / page_ref all set, so every alert links back
+to its source).
 
 CLI:
   python -m src.alerts summarize --doc-id 1
   python -m src.alerts diff --ticker 0700.HK --from-year 2024 --to-year 2025
 """
-from openai import OpenAI
-
-from src.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from src import llm
+from src.config import LLM_MODEL, LLM_SECTION_TEXT_CAP
 from src.db import get_conn
 
 SUMMARY_PROMPT = (
@@ -33,23 +32,11 @@ CHANGE_PROMPT = (
     "=== Summary FY{year_a} (prior) ===\n{sum_a}\n\n=== Summary FY{year_b} (current) ===\n{sum_b}"
 )
 
-SECTION_TEXT_CAP = 300_000  # chars (~90k tokens) — v4-flash takes it easily; keeps cost bounded
 MIN_SECTION_CHARS = 500     # skip near-empty sections
-
-_client = None
 
 
 def _chat(prompt: str) -> str:
-    global _client
-    if _client is None:
-        _client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-    resp = _client.chat.completions.create(
-        model=DEEPSEEK_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=5000,  # thinking mode bills reasoning tokens from this budget
-    )
-    return (resp.choices[0].message.content or "").strip()
+    return llm.chat([{"role": "user", "content": prompt}], temperature=0.3)
 
 
 def _section_text(conn, doc_id: int, start_page: int, end_page: int) -> str:
@@ -57,7 +44,7 @@ def _section_text(conn, doc_id: int, start_page: int, end_page: int) -> str:
         "SELECT raw_text FROM pages WHERE doc_id = %s AND page_num BETWEEN %s AND %s ORDER BY page_num",
         (doc_id, start_page, end_page),
     ).fetchall()
-    return "\n".join(r[0] or "" for r in rows)[:SECTION_TEXT_CAP]
+    return "\n".join(r[0] or "" for r in rows)[:LLM_SECTION_TEXT_CAP]
 
 
 def summarize_sections(doc_id: int) -> int:
@@ -84,7 +71,7 @@ def summarize_sections(doc_id: int) -> int:
             summary = _chat(SUMMARY_PROMPT.format(section_type=stype, ticker=ticker, year=year, text=text))
             conn.execute(
                 "INSERT INTO summaries (doc_id, section_id, summary_text, model) VALUES (%s, %s, %s, %s)",
-                (doc_id, section_id, summary, DEEPSEEK_MODEL),
+                (doc_id, section_id, summary, LLM_MODEL),
             )
             written += 1
             print(f"  summarized {ticker} FY{year} {stype} p.{a}-{b} ({len(text):,} chars)")

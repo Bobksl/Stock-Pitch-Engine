@@ -7,10 +7,18 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
-# DeepSeek (OpenAI-compatible)
-DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+# LLM — any OpenAI-compatible chat API (DeepSeek, OpenAI, OpenRouter, Groq, Together,
+# local Ollama / LM Studio, …). Only the generation step uses this; embeddings stay local.
+# Key is read lazily so ingest/chunk/segment can run with no LLM key at all.
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
+# Some "reasoning" models spend this budget on hidden thinking tokens before answering,
+# so keep it generous. Lower it only to cap cost on non-reasoning models.
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "5000"))
+# Cap on chars fed to the summarizer per section (~4 chars/token). 300k ≈ 75k tokens, which
+# fits large-context models (DeepSeek, GPT-4o). Lower it for models with < 128k context.
+LLM_SECTION_TEXT_CAP = int(os.getenv("LLM_SECTION_TEXT_CAP", "300000"))
 
 # Postgres — 127.0.0.1 (not 'localhost'): Windows resolves localhost to ::1 first and Docker's
 # IPv6 mapping can hang; connect_timeout makes any such failure loud instead of a silent hang.

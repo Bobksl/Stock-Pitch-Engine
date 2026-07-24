@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
 
+from src.config import EMBEDDING_MODEL, LLM_MODEL
 from src.db import get_conn
 from src.rag_chat import answer
 
@@ -54,7 +55,7 @@ def load_alerts():
 tickers, years = filter_options()
 with st.sidebar:
     st.title("📑 Equity Filings RAG")
-    st.caption("HK filings · DeepSeek v4-flash · BGE-M3 · PostgreSQL + pgvector · no frameworks")
+    st.caption(f"{LLM_MODEL} · {EMBEDDING_MODEL} · PostgreSQL + pgvector · no frameworks")
     f_ticker = st.selectbox("Ticker filter", ["All"] + tickers)
     f_year = st.selectbox("Fiscal year filter", ["All"] + [str(y) for y in years])
     k = st.slider("Chunks to retrieve (top-k)", 4, 16, 8)

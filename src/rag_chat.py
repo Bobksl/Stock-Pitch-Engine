@@ -1,14 +1,12 @@
 """Module 4 — RAG chat loop (raw Python + SQL, no framework).
 
-embed question (same BGE-M3 model) -> metadata-filtered HNSW cosine top-k SQL
+embed question (same local embedding model) -> metadata-filtered HNSW cosine top-k SQL
 -> grounding prompt with [ticker year type | section | p.N] tags per chunk
--> deepseek-v4-flash -> answer + structured citations.
+-> configured LLM -> answer + structured citations.
 
 CLI:  python -m src.rag_chat "What were the main revenue drivers?" [--ticker 0700.HK] [--year 2025] [-k 8]
 """
-from openai import OpenAI
-
-from src.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from src import llm
 from src.db import get_conn
 
 SYSTEM_PROMPT = (
@@ -76,15 +74,12 @@ def answer(question: str, ticker: str | None = None, year: int | None = None, k:
         return {"answer": "No chunks retrieved — is the corpus embedded?", "citations": []}
 
     context = "\n\n".join(f"{_tag(c)}\n{c['content']}" for c in chunks)
-    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-    resp = client.chat.completions.create(
-        model=DEEPSEEK_MODEL,
-        messages=[
+    resp = llm.complete(
+        [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Context chunks:\n\n{context}\n\nQuestion: {question}"},
         ],
         temperature=0.2,
-        max_tokens=5000,  # v4-flash thinking mode spends reasoning tokens from this budget — keep generous
     )
     citations = [
         {k_: c[k_] for k_ in ("ticker", "fiscal_year", "doc_type", "section", "page", "end_page",
