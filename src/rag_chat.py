@@ -1,7 +1,7 @@
 """Module 4 — RAG chat loop (raw Python + SQL, no framework).
 
 embed question (same local embedding model) -> metadata-filtered HNSW cosine top-k SQL
--> grounding prompt with [ticker year type | section | p.N] tags per chunk
+-> grounding prompt with [ticker year type | section | p.N or Item 7A] tags per chunk
 -> configured LLM -> answer + structured citations.
 
 CLI:  python -m src.rag_chat "What were the main revenue drivers?" [--ticker 0700.HK] [--year 2025] [-k 8]
@@ -27,7 +27,8 @@ SYSTEM_PROMPT = (
 RETRIEVAL_SQL = """
 SELECT c.chunk_id, c.page, COALESCE(c.end_page, c.page) AS end_page,
        COALESCE(s.section_type, 'n/a') AS section,
-       d.ticker, d.fiscal_year, d.doc_type, c.content,
+       d.ticker, d.fiscal_year, d.doc_type, c.content, d.format,
+       s.section_key, c.start_char,
        c.embedding <=> %(qvec)s AS distance
 FROM chunks c
 JOIN documents d ON d.doc_id = c.doc_id
@@ -56,16 +57,28 @@ def retrieve(question: str, ticker: str | None = None, year: int | None = None, 
     qvec = _embed_question(question)
     with get_conn() as conn:
         rows = conn.execute(RETRIEVAL_SQL, {"qvec": qvec, "ticker": ticker, "year": year, "k": k}).fetchall()
-    cols = ("chunk_id", "page", "end_page", "section", "ticker", "fiscal_year", "doc_type", "content", "distance")
+    cols = ("chunk_id", "page", "end_page", "section", "ticker", "fiscal_year", "doc_type",
+            "content", "format", "section_key", "start_char", "distance")
     return [dict(zip(cols, r)) for r in rows]
 
 
-def _pages(c: dict) -> str:
+def _locator(c: dict) -> str:
+    """Where the chunk lives, in the terms its own format uses.
+
+    PDFs have pages; a 10-K does not, so a US chunk is located by its Item —
+    the anchor a reader can actually navigate to — falling back to the character
+    offset when the chunk sits outside any Item.
+    """
+    if c.get("format") == "html":
+        if c.get("section_key"):
+            item = c["section_key"].removeprefix("item_").upper()
+            return f"Item {item}"
+        return f"@{c['start_char']}"
     return f"p.{c['page']}" if c["end_page"] == c["page"] else f"p.{c['page']}-{c['end_page']}"
 
 
 def _tag(c: dict) -> str:
-    return f"[{c['ticker']} {c['fiscal_year']} {c['doc_type']} | {c['section']} | {_pages(c)}]"
+    return f"[{c['ticker']} {c['fiscal_year']} {c['doc_type']} | {c['section']} | {_locator(c)}]"
 
 
 def answer(question: str, ticker: str | None = None, year: int | None = None, k: int = 8) -> dict:
