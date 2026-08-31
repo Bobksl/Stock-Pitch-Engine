@@ -21,3 +21,7 @@ Thumbs.db
 
 # EDGAR response cache (regenerable; keeps tests offline)
 data/edgar_cache/
+
+# Licensed external data (Bloomberg BEst, market data). Locally auditable,
+# never redistributed: this repository is public. See src/qc/external.py.
+data/external/
