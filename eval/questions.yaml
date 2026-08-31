@@ -1,0 +1,349 @@
+# ============================================================================
+# P1.4 / Audit R7 — the labelled retrieval question set.
+#
+# Gold labels are LOCATIONS, not chunk ids: (ticker, fiscal_year, section_key),
+# optionally narrowed by a pattern the chunk must contain. A chunk id would be
+# invalidated by any change to chunk size, overlap or the segmenter — exactly
+# the changes this set exists to evaluate — so a chunk-keyed gold set silently
+# rots the first time the chunker is tuned. An Item is stable and a human can
+# check it.
+#
+# `gold` may list several locations when an answer legitimately lives in more
+# than one Item (segment economics appear in both the business description and
+# the MD&A). A question is a hit when any gold location is retrieved.
+#
+# `ticker` / `year` are RETRIEVAL FILTERS, not labels. Most questions are left
+# unfiltered on purpose: searching the whole corpus is the realistic setting and
+# it is the only one that exposes cross-entity ranking problems (Audit R4).
+#
+# Every label below was checked against the retrieved text, not assumed.
+# ============================================================================
+version: 1
+
+questions:
+
+  # -- Item 1 · business model, segments, customers -------------------------
+  - id: msft_segments_named
+    question: Which reportable segments does Microsoft operate?
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_7}
+    must_match: Intelligent Cloud
+    note: segment definitions in the business description and MD&A
+
+  - id: nvda_segments_named
+    question: What are NVIDIA's two reportable segments?
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_7}
+    must_match: Compute
+
+  - id: aapl_products
+    question: What product lines does Apple sell?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1}
+
+  - id: amd_business_lines
+    question: What businesses does AMD operate in?
+    ticker: AMD
+    gold:
+      - {ticker: AMD, fiscal_year: any, section_key: item_1}
+
+  - id: msft_human_capital
+    question: How does Microsoft describe its workforce and human capital?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1}
+
+  - id: nvda_customers_concentration
+    question: How concentrated is NVIDIA's customer base?
+    ticker: NVDA
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_7}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_15}
+
+  - id: aapl_seasonality
+    question: How seasonal is Apple's business?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1}
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1a}
+      - {ticker: AAPL, fiscal_year: any, section_key: item_7}
+
+  - id: amd_competition
+    question: Who does AMD compete against?
+    ticker: AMD
+    gold:
+      - {ticker: AMD, fiscal_year: any, section_key: item_1}
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+
+  - id: msft_intellectual_property
+    question: How does Microsoft protect its intellectual property?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1}
+
+  - id: nvda_supply_chain
+    question: How does NVIDIA describe its manufacturing and supply arrangements?
+    ticker: NVDA
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+
+  # -- Item 1A · risk factors ----------------------------------------------
+  - id: msft_ai_risk
+    question: What risks does Microsoft disclose about artificial intelligence?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1a}
+
+  - id: nvda_export_controls
+    question: What does NVIDIA say about export controls on its products to China?
+    ticker: NVDA
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+
+  - id: aapl_china_risk
+    question: What risks does Apple disclose about its dependence on China?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1a}
+
+  - id: amd_foundry_risk
+    question: What risk does AMD face from relying on third-party foundries?
+    ticker: AMD
+    gold:
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+
+  - id: msft_cyber_risk
+    question: What cybersecurity risks does Microsoft identify?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1a}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1c}
+
+  - id: nvda_competition_risk
+    question: What competitive risks does NVIDIA disclose?
+    ticker: NVDA
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+
+  - id: aapl_antitrust_risk
+    question: What legal and regulatory risks does Apple face over the App Store?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1a}
+
+  - id: amd_inventory_risk
+    question: What does AMD say about inventory and demand forecasting risk?
+    ticker: AMD
+    gold:
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+
+  # -- Item 1C · cybersecurity governance (FY2024 onward) -------------------
+  - id: msft_cyber_governance
+    question: How does Microsoft's board oversee cybersecurity risk management?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1c}
+
+  - id: nvda_cyber_governance
+    question: What processes does NVIDIA use to assess and manage cybersecurity threats?
+    ticker: NVDA
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1c}
+
+  # -- Item 3 · legal proceedings ------------------------------------------
+  - id: aapl_legal_proceedings
+    question: What legal proceedings is Apple involved in?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_3}
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1a}
+
+  # -- Item 5 · market for equity, buybacks, dividends ----------------------
+  - id: msft_buybacks
+    question: What share repurchase program has Microsoft authorized?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_5}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_8}
+
+  - id: aapl_dividends
+    question: What is Apple's dividend and capital return policy?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_5}
+      - {ticker: AAPL, fiscal_year: any, section_key: item_7}
+
+  # -- Item 7 · MD&A · drivers and results ---------------------------------
+  - id: msft_cloud_drivers
+    question: What drove growth in Microsoft's Intelligent Cloud segment?
+    ticker: MSFT
+    year: 2026
+    gold:
+      - {ticker: MSFT, fiscal_year: 2026, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: nvda_datacenter_growth
+    question: What drove the increase in NVIDIA's Data Center revenue?
+    ticker: NVDA
+    year: 2026
+    gold:
+      - {ticker: NVDA, fiscal_year: 2026, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: aapl_services_growth
+    question: Why did Apple's Services revenue grow?
+    ticker: AAPL
+    year: 2025
+    gold:
+      - {ticker: AAPL, fiscal_year: 2025, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: amd_gross_margin_drivers
+    question: What explains the change in AMD's gross margin?
+    ticker: AMD
+    year: 2025
+    gold:
+      - {ticker: AMD, fiscal_year: 2025, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: msft_opex_drivers
+    question: Why did Microsoft's operating expenses increase?
+    ticker: MSFT
+    year: 2026
+    gold:
+      - {ticker: MSFT, fiscal_year: 2026, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: nvda_gross_margin
+    question: What drove the change in NVIDIA's gross margin?
+    ticker: NVDA
+    year: 2026
+    gold:
+      - {ticker: NVDA, fiscal_year: 2026, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: msft_liquidity
+    question: What are Microsoft's sources of liquidity and capital resources?
+    ticker: MSFT
+    year: 2026
+    gold:
+      - {ticker: MSFT, fiscal_year: 2026, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: amd_cash_flow
+    question: How did AMD's cash flow from operations change and why?
+    ticker: AMD
+    year: 2025
+    gold:
+      - {ticker: AMD, fiscal_year: 2025, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: nvda_capex_commitments
+    question: What purchase commitments and supply obligations does NVIDIA have?
+    ticker: NVDA
+    year: 2026
+    gold:
+      - {ticker: NVDA, fiscal_year: 2026, section_key: item_7}
+      - {ticker: NVDA, fiscal_year: 2026, section_key: item_15}
+
+  # -- Item 7A · market risk -----------------------------------------------
+    note: year-pinned; the year filter is how production asks this
+
+  - id: msft_fx_risk
+    question: How is Microsoft exposed to foreign currency exchange rate risk?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_7a}
+
+  - id: aapl_interest_rate_risk
+    question: How is Apple exposed to interest rate risk on its investment portfolio?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_7a}
+
+  # -- Item 8 / Item 15 · statements and notes ------------------------------
+  # NVIDIA files its financial statements under Item 15, not Item 8 — its
+  # Item 8 is a cross-reference of a couple of hundred characters.
+  - id: msft_revenue_recognition
+    question: What is Microsoft's revenue recognition policy?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_8}
+
+  - id: nvda_revenue_recognition
+    question: What is NVIDIA's revenue recognition policy?
+    ticker: NVDA
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_15}
+
+  - id: msft_deferred_revenue
+    question: What does Microsoft disclose about unearned or deferred revenue?
+    ticker: MSFT
+    year: 2026
+    gold:
+      - {ticker: MSFT, fiscal_year: 2026, section_key: item_8}
+      - {ticker: MSFT, fiscal_year: 2026, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: aapl_income_taxes
+    question: What is Apple's effective tax rate and what drives it?
+    ticker: AAPL
+    year: 2025
+    gold:
+      - {ticker: AAPL, fiscal_year: 2025, section_key: item_8}
+      - {ticker: AAPL, fiscal_year: 2025, section_key: item_7}
+    note: year-pinned; the year filter is how production asks this
+
+  - id: amd_goodwill
+    question: How does AMD account for goodwill and test it for impairment?
+    ticker: AMD
+    gold:
+      - {ticker: AMD, fiscal_year: any, section_key: item_8}
+
+  - id: msft_leases
+    question: What does Microsoft disclose about its operating and finance leases?
+    ticker: MSFT
+    gold:
+      - {ticker: MSFT, fiscal_year: any, section_key: item_8}
+
+  - id: nvda_stock_compensation
+    question: How much stock-based compensation did NVIDIA record and how is it measured?
+    ticker: NVDA
+    year: 2026
+    gold:
+      - {ticker: NVDA, fiscal_year: 2026, section_key: item_15}
+
+  # -- Item 9A · controls ---------------------------------------------------
+    note: year-pinned; the year filter is how production asks this
+
+  - id: aapl_internal_controls
+    question: What did management conclude about the effectiveness of internal control
+      over financial reporting?
+    ticker: AAPL
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_9a}
+
+  # -- cross-entity: unfiltered, to expose ranking across filers ------------
+  - id: cross_export_controls
+    question: Which company discusses US export licence requirements for AI chips
+      sold to China?
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_7}
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+    note: unfiltered on purpose — tests cross-filer ranking (Audit R4)
+
+  - id: cross_data_center_demand
+    question: What do semiconductor companies say about data center demand for
+      accelerated computing?
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_7}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1}
+      - {ticker: AMD, fiscal_year: any, section_key: item_7}
+      - {ticker: AMD, fiscal_year: any, section_key: item_1}
+    note: unfiltered — two filers are legitimately relevant
