@@ -29,3 +29,7 @@ pytest>=8.3
 
 # Inline-XBRL parsing (R1) — C-accelerated XML/HTML; no arelle (heavy, JVM-era deps)
 lxml>=5.3
+
+# Excel valuation workbook (Phase 2, framework 4.12) — live formulas, two-way
+# interface. Python owns calculation; the workbook is read back, not trusted.
+openpyxl>=3.1
