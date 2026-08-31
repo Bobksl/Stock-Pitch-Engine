@@ -137,8 +137,12 @@ _MONTHS = ("January|February|March|April|May|June|July|August|September|"
 _MASK_TOKENS.append(re.compile(
     rf"\b(?:\d{{1,2}}\s+)?(?:{_MONTHS})\.?(?:\s+\d{{1,2}})?,?(?:\s+\d{{4}})?\b"))
 
-_CITATION_INDEX_RE = re.compile(
-    r"^#{1,6}\s*Citation index\s*$.*?(?=^#{1,6}\s|\Z)",
+# The draft's two DECLARATION sections state provenance; they do not make
+# claims. Both are masked by heading rather than relying on their YAML being
+# fenced, so an unfenced block does not spray spurious claims (cik numbers,
+# period dates) across the report.
+_DECLARATION_RE = re.compile(
+    r"^#{1,6}[ \t]*(?:Citation index|Model cells)[ \t]*$.*?(?=^#{1,6}[ \t]|\Z)",
     re.MULTILINE | re.DOTALL | re.I)
 
 
@@ -151,7 +155,7 @@ def _blank(text: str, start: int, end: int) -> str:
 def mask(md: str) -> str:
     """The draft with every no-claim region blanked, offsets unchanged."""
     out = md
-    for pattern in (_FENCE_RE, _CITATION_INDEX_RE, _INLINE_CODE_RE,
+    for pattern in (_FENCE_RE, _DECLARATION_RE, _INLINE_CODE_RE,
                     _LINK_TARGET_RE, _ANCHOR_RE, *_MASK_TOKENS):
         for m in list(pattern.finditer(out)):
             out = _blank(out, m.start(), m.end())

@@ -253,3 +253,15 @@ def test_multiline_draft_reports_correct_line_numbers():
     md = "# Heading\n\nRevenue was $50 billion.\n\nMargin was 41.4%.\n"
     lines = [c.line for c in extract_claims(md)]
     assert lines == [3, 5]
+
+
+def test_an_unfenced_model_cells_section_is_masked_too():
+    """Both declaration sections are masked by heading, not by relying on their
+    YAML being fenced: an unfenced block must not spray cik numbers and period
+    dates across the report as spurious claims."""
+    md = ("Revenue was $50 billion [^F1].\n\n"
+          "## Model cells\n\n"
+          "m:\n  op: ratio\n  inputs:\n    - {cik: 789019, period_end: 2026-06-30}\n\n"
+          "## Citation index\n\n"
+          "F1: {kind: fact, cik: 789019}\n")
+    assert [c.text for c in extract_claims(md)] == ["$50 billion"]
