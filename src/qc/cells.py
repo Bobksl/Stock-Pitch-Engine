@@ -37,6 +37,7 @@ from typing import Any
 import yaml
 
 from src.facts.api import Fact, get_fact
+from src.qc.external import ExternalRecord
 
 
 class CellError(ValueError):
@@ -99,15 +100,17 @@ class CellRegistry:
 
     declarations: dict[str, dict] = field(default_factory=dict)
     as_of: date | None = None
+    externals: dict[str, ExternalRecord] = field(default_factory=dict)
     _cache: dict[str, CellResult] = field(default_factory=dict, repr=False)
     _computing: set[str] = field(default_factory=set, repr=False)
 
     @classmethod
-    def from_yaml(cls, text: str, *, as_of: date | None = None) -> "CellRegistry":
+    def from_yaml(cls, text: str, *, as_of: date | None = None,
+                  externals: dict[str, ExternalRecord] | None = None) -> "CellRegistry":
         loaded = yaml.safe_load(text) or {}
         if not isinstance(loaded, dict):
             raise CellError("model cell declarations must be a mapping")
-        return cls(declarations=loaded, as_of=as_of)
+        return cls(declarations=loaded, as_of=as_of, externals=externals or {})
 
     def __contains__(self, name: str) -> bool:
         return name in self.declarations
@@ -168,6 +171,15 @@ class CellRegistry:
         """A cell input is a fact reference, another cell, or a declared literal."""
         if isinstance(ref, dict) and "cell" in ref:
             return self.compute(ref["cell"]).value, None
+        if isinstance(ref, dict) and "external" in ref:
+            # A multiple is price over earnings: one side is market data with no
+            # facts row by construction, the other is XBRL. Both are cited.
+            record = self.externals.get(ref["external"])
+            if record is None:
+                raise CellError(
+                    f"model cell {owner!r}: no external record named "
+                    f"{ref['external']!r} in the external store")
+            return record.value, None
         if isinstance(ref, dict) and "literal" in ref:
             # Allowed, but it must say where it came from: an undocumented
             # constant in a valuation is exactly what P3 exists to prevent.
@@ -190,4 +202,5 @@ class CellRegistry:
             return fact.value, fact
         raise CellError(
             f"model cell {owner!r}: an input must be a fact reference "
-            f"(cik/concept/period_end), {{cell: name}}, or {{literal, note}}")
+            f"(cik/concept/period_end), {{cell: name}}, {{external: key}}, "
+            f"or {{literal, note}}")

@@ -118,12 +118,24 @@ _MASK_TOKENS = [
     re.compile(r"\bFY\s?\d{2,4}\b", re.I),               # FY2026, FY 26
     re.compile(r"\bQ[1-4]\s?(?:FY)?\s?\d{0,4}\b", re.I),  # Q3, Q3 FY2026
     re.compile(r"\bItems?\s+\d+[A-Za-z]?\b", re.I),      # Item 1A
+    re.compile(r"\bSections?\s+\d+(?:\.\d+)*\b", re.I),  # Section 3, Section 2.5
+    re.compile(r"^#{1,6}[ \t]*\d+(?:\.\d+)*\.?", re.M),  # numbered heading
+    re.compile(r"^[ \t]*\d{1,3}[.)][ \t]", re.M),        # ordered-list marker
     re.compile(r"(?<!\d)\d{1,2}-[KQ]\b"),                # 10-K, 10-Q
     re.compile(r"§\s?\d+(?:\.\d+)*[a-z]?"),              # §4.6, §2.5i
     re.compile(r"\b[A-Z]\d+(?:\.\d+)*\b"),               # C10, P1.2, R5
     re.compile(r"\bASC\s+\d+\b", re.I),                  # ASC 280
     re.compile(r"\bCIK\s*:?\s*\d+\b", re.I),
 ]
+
+# Prose dates: "30 June 2026", "June 30, 2026", "Jun. 2026". Deliberately
+# CASE-SENSITIVE -- a month is a proper noun in a date, and matching "may"
+# case-insensitively would swallow the figure in "may fall 30%".
+_MONTHS = ("January|February|March|April|May|June|July|August|September|"
+           "October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|"
+           "Oct|Nov|Dec")
+_MASK_TOKENS.append(re.compile(
+    rf"\b(?:\d{{1,2}}\s+)?(?:{_MONTHS})\.?(?:\s+\d{{1,2}})?,?(?:\s+\d{{4}})?\b"))
 
 _CITATION_INDEX_RE = re.compile(
     r"^#{1,6}\s*Citation index\s*$.*?(?=^#{1,6}\s|\Z)",
@@ -304,7 +316,11 @@ def extract_claims(md: str) -> list[NumericClaim]:
         start, end = m.start(), m.end()
         while start < end and md[start].isspace():
             start += 1
-        line_idx = line_of(m.start())
+        # Line comes from `start`, not `m.start()`: the optional `\s?` after the
+        # currency group can swallow the preceding NEWLINE, which would put the
+        # claim on the line above -- misreporting its position and, worse,
+        # preventing its anchor on the real line from binding.
+        line_idx = line_of(start)
         line_text = lines[line_idx]
         col_off = start - starts[line_idx]
 

@@ -1,0 +1,15 @@
+# Synthetic external records for the QC test suite.
+#
+# These are TEST DATA, not terminal data: the price below is an invented number
+# chosen so the golden draft's trailing P/E lands on a clean value. The real
+# external store lives under data/external/ and is git-ignored, because
+# Bloomberg-derived values are licensed and this repository is public
+# (see src/qc/external.py).
+msft_price_20260828:
+  kind: market_price
+  value: 512.40
+  unit: USD/shares
+  source: synthetic test fixture (not market data)
+  as_of: 2026-08-28
+  ticker: MSFT
+  note: invented price used only to exercise the external provenance class
