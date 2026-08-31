@@ -1,0 +1,156 @@
+# ============================================================================
+# Canonical concept -> XBRL tag resolution.
+#
+# Filers tag the same economic concept differently, and the same filer changes
+# tags between years. Resolution must therefore be explicit, ordered, versioned
+# and reviewable in a diff — never an LLM guess and never a fallback chain
+# buried in code (Audit section 5: the LLM may never compute or select a number).
+#
+# Order is priority: the first tag with data for the requested period wins, and
+# the tag actually used is carried on every returned Fact so a citation names it.
+#
+# Adding a tag here is a reviewable act. If a filer needs one nobody else does,
+# put it under `overrides` against that CIK rather than widening the default.
+# ============================================================================
+version: 1
+
+axes:
+  segment: us-gaap:StatementBusinessSegmentsAxis
+  geography: srt:StatementGeographicalAxis
+  product: srt:ProductOrServiceAxis
+
+# Axes that QUALIFY a segment amount rather than slicing it further.
+#
+# ASC 280 tagging commonly pairs the segment axis with ConsolidationItemsAxis =
+# OperatingSegmentsMember to say "this is the reportable-segment amount", as
+# distinct from intersegment eliminations or corporate. NVIDIA tags every
+# segment figure this way. Such a fact is still a segment row.
+#
+# A fact carrying the segment axis AND geography or product is a finer slice,
+# not a segment total, and is excluded — summing those would double-count.
+qualifier_axes:
+  srt:ConsolidationItemsAxis:
+    - us-gaap:OperatingSegmentsMember
+
+concepts:
+
+  revenue:
+    label: Total revenue
+    unit: USD
+    period_type: duration
+    tags:
+      # ASC 606 tag, mandatory for periods from 2018; the modern default.
+      - us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      - us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax
+      # Pre-606 and non-606 revenue (leases, interest, insurance premiums).
+      - us-gaap:Revenues
+      - us-gaap:SalesRevenueNet
+
+  cost_of_revenue:
+    label: Cost of revenue
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:CostOfRevenue
+      - us-gaap:CostOfGoodsAndServicesSold
+      - us-gaap:CostOfServices
+
+  gross_profit:
+    label: Gross profit
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:GrossProfit
+
+  operating_income:
+    label: Operating income
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:OperatingIncomeLoss
+    # Same tag carries the segment breakdown when a segment member is present —
+    # that dimensional form is what companyfacts cannot publish, and what
+    # framework 1.3 requires ("segment operating profit, required not optional").
+
+  net_income:
+    label: Net income
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:NetIncomeLoss
+      - us-gaap:ProfitLoss
+
+  research_and_development:
+    label: R&D expense
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:ResearchAndDevelopmentExpense
+
+  operating_cash_flow:
+    label: Cash from operations
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:NetCashProvidedByUsedInOperatingActivities
+      - us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations
+
+  capex:
+    label: Capital expenditure
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:PaymentsToAcquirePropertyPlantAndEquipment
+      - us-gaap:PaymentsToAcquireProductiveAssets
+
+  depreciation_amortisation:
+    label: Depreciation and amortisation
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:DepreciationDepletionAndAmortization
+      - us-gaap:DepreciationAmortizationAndAccretionNet
+
+  share_based_compensation:
+    label: Stock-based compensation
+    unit: USD
+    period_type: duration
+    tags:
+      - us-gaap:ShareBasedCompensation
+
+  cash_and_equivalents:
+    label: Cash and cash equivalents
+    unit: USD
+    period_type: instant
+    tags:
+      - us-gaap:CashAndCashEquivalentsAtCarryingValue
+
+  total_debt_long_term:
+    label: Long-term debt
+    unit: USD
+    period_type: instant
+    tags:
+      - us-gaap:LongTermDebtNoncurrent
+      - us-gaap:LongTermDebt
+
+  diluted_shares:
+    label: Diluted weighted-average shares
+    unit: shares
+    period_type: duration
+    tags:
+      - us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding
+
+  diluted_eps:
+    label: Diluted EPS
+    unit: USD/shares
+    period_type: duration
+    tags:
+      - us-gaap:EarningsPerShareDiluted
+
+# Per-filer deviations. Keep these rare and justified: a note is required so the
+# next reader knows why the default was not good enough.
+overrides: {}
+  # 1045810:                       # NVIDIA
+  #   revenue:
+  #     note: example only
+  #     tags: [us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax]
