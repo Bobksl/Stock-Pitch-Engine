@@ -23,3 +23,9 @@ streamlit>=1.40
 
 # Config
 python-dotenv>=1.0
+
+# Tests
+pytest>=8.3
+
+# Inline-XBRL parsing (R1) — C-accelerated XML/HTML; no arelle (heavy, JVM-era deps)
+lxml>=5.3

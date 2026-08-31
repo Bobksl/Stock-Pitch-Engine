@@ -45,3 +45,14 @@ TESSERACT_CMD = os.getenv("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tess
 TESSDATA_DIR = os.getenv("TESSDATA_DIR", r"C:\tools\tessdata")  # holds chi_tra (Program Files needs admin)
 POPPLER_PATH = os.getenv("POPPLER_PATH", r"C:\tools\poppler\Library\bin")
 OCR_LANG = "chi_tra+eng"
+
+# ============================================================================
+# SEC EDGAR (Phase 0 — R1/R2). SEC REQUIRES a descriptive User-Agent carrying
+# contact info and rejects anonymous traffic with 403. No default is shipped:
+# a repo-wide fallback would send someone else's contact details to the SEC.
+# ============================================================================
+EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "")
+# SEC's published cap is 10 req/s; stay comfortably under it.
+EDGAR_RPS = float(os.getenv("EDGAR_RPS", "5"))
+# Cache-first fetching keeps re-runs offline, deterministic and free.
+EDGAR_CACHE_DIR = Path(os.getenv("EDGAR_CACHE_DIR", str(PROJECT_ROOT / "data" / "edgar_cache")))
