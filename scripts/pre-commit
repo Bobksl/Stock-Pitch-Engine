@@ -1,0 +1,47 @@
+#!/bin/sh
+# Block licensed terminal data from ever entering a public repository.
+#
+# This is licensing exposure, not privacy housekeeping. Bloomberg exports carry
+# an explicit no-redistribution notice -- the AVGO DES page in the case-study
+# folder says so on every page -- and this repository is public. A single
+# committed export is a licence breach that git history makes permanent, since
+# removing the file in a later commit does not remove it from the history.
+#
+# Install:  git config core.hooksPath scripts
+#
+# Deliberately a hard block with no --no-verify guidance in the message. Anyone
+# who genuinely needs to commit a matching path knows how to bypass a hook; the
+# hook exists for the case where nobody was thinking about it at all.
+
+blocked=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ei \
+  -e '(^|/)data/bloomberg/' \
+  -e '(^|/)bloomberg/' \
+  -e '(^|/)case[ _-]?study[ _-]' \
+  -e '(^|/)data/external/' \
+  -e '\.bbg$' \
+  -e '(^|/)grid(_[a-z0-9]+)?\.xlsx$' \
+  -e '(^|/)ECFC' )
+
+if [ -n "$blocked" ]; then
+    echo "COMMIT BLOCKED — licensed terminal data" >&2
+    echo >&2
+    echo "$blocked" | sed 's/^/    /' >&2
+    echo >&2
+    echo "These paths look like Bloomberg-derived exports. This repository is" >&2
+    echo "public and terminal data carries redistribution restrictions, so a" >&2
+    echo "commit here is a licence breach that history makes permanent." >&2
+    echo >&2
+    echo "Keep the files outside the repository, or encode the arithmetic you" >&2
+    echo "need as test constants -- which is what tests/test_comps.py does with" >&2
+    echo "the Reddit worked example." >&2
+    exit 1
+fi
+
+# The .env file holds a real API key. Belt and braces alongside .gitignore,
+# because a `git add -f` bypasses the ignore file and not this.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qE '(^|/)\.env$'; then
+    echo "COMMIT BLOCKED — .env holds a live API key" >&2
+    exit 1
+fi
+
+exit 0

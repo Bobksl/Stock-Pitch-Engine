@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.eval.harness import (
+from src.retrieval.eval.harness import (
     ANY_YEAR,
     EvalReport,
     GoldTarget,
@@ -195,5 +195,5 @@ def test_retrieval_holds_its_measured_floor():
 
 @pytest.mark.skipif(not corpus_ready(), reason="embedded corpus not loaded")
 def test_the_questions_yaml_lives_where_the_harness_looks_for_it():
-    from src.eval.harness import QUESTIONS_PATH
+    from src.retrieval.eval.harness import QUESTIONS_PATH
     assert Path(QUESTIONS_PATH).exists()

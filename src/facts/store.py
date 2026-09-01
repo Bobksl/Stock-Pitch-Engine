@@ -18,7 +18,7 @@ from decimal import Decimal
 from psycopg.types.json import Jsonb
 
 from src.db import get_conn
-from src.edgar.ixbrl import XbrlFact, parse_cached_filing
+from src.ingest.edgar.ixbrl import XbrlFact, parse_cached_filing
 
 UPSERT_FACT = """
 INSERT INTO facts (cik, accession, doc_id, taxonomy, tag, unit, period_type,
@@ -78,7 +78,7 @@ def store_filing_facts(accession: str) -> dict:
 
 def store_companyfacts(cik: int, *, force: bool = False) -> dict:
     """Load SEC's consolidated series for one filer (source='companyfacts')."""
-    from src.edgar.companyfacts import iter_companyfacts
+    from src.ingest.edgar.companyfacts import iter_companyfacts
 
     with get_conn() as conn:
         rows = [{

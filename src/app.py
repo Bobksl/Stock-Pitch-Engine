@@ -11,7 +11,7 @@ import streamlit as st
 
 from src.config import EMBEDDING_MODEL, LLM_MODEL
 from src.db import get_conn
-from src.rag_chat import answer
+from src.retrieval.chat import answer
 
 st.set_page_config(page_title="Equity Filings RAG", page_icon="📑", layout="wide")
 
