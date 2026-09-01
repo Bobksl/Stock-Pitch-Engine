@@ -124,13 +124,25 @@ explicit forecast.
   rendered as `=B13-B8-B5`. The Target tab's identity row exists to catch a decomposition that
   does not add up, and it caught itself first, returning -204.9 instead of 0.
 
-### Next: Workstream B (repo repositioning)
-- **B1 rename** to `stock-pitch-engine` — needs a GitHub UI action first, then
-  `git remote set-url`. Cannot be done from here.
-- **B2 README** led by the QC gate and the TSMC demo, not the RAG.
-- **B3 package layout** as one mechanical commit, no behaviour change.
-- **B4 git hygiene** — pre-commit hook blocking licensed terminal data, `.gitignore`, CI,
-  phase tags, disclaimer.
+### Workstream B — done except the rename (2026-09-02)
+- **B2 README** ✅ rewritten around the QC gate and the TSMC audit output. War stories kept
+  and extended; the false "no eval harness yet" limitation removed.
+- **B3 package layout** ✅ `ingest/` · `sections/` · `retrieval/` beside `facts/` `qc/`
+  `valuation/`; `config/db/llm/app` stay at the top. One mechanical commit, all `git mv`,
+  566 passed before and after. One import the rewrite could not see: `from src.edgar import
+  sections_us` is a from-import, invisible to a dotted-path regex, and only the test run
+  found it.
+- **B4 hygiene** ✅ `scripts/pre-commit` blocks Bloomberg paths and `.env` — verified by
+  trying, and it blocks through `git add -f`, which `.gitignore` alone does not. CI runs
+  pytest with `formulas` installed so C11 actually runs rather than skipping. Tags
+  `v0.1-phase-0`, `v0.2-phase-1` created; phase 2 gets its tag on the merge commit.
+  Install the hook in a fresh clone with `git config core.hooksPath scripts`.
+- **B1 rename** ⬜ **NEEDS A HUMAN.** Rename on GitHub (Settings → Repository name →
+  `stock-pitch-engine`), then `git remote set-url origin
+  https://github.com/Bobksl/stock-pitch-engine.git`, then change the badge URL on README
+  line 3. GitHub redirects the old URL, so nothing breaks in the meantime.
+
+**Nothing is pushed.** 21 commits on `phase-2-valuation`, plus two tags.
 
 ### Live case study: AVGO (data review, 2026-09-02)
 `../Case Study - AVGO Stock Pitch/` (OUTSIDE the repo, and it must stay there — the DES PDF
