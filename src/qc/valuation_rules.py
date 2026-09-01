@@ -627,3 +627,53 @@ def return_decomposition_measurements(decomposition) -> list[Measurement]:
                         Decimal("0.1")),
                     unit=" points", spec_ref="4.9"),
     ]
+
+
+# --------------------------------------------------------------------------
+# Scenarios (framework 4.10). Class A, and the reason is worth stating: a case
+# that cites no pillar is not a weaker scenario, it is not a scenario. Nothing
+# in it could have turned out differently for a reason anyone named in
+# advance, so it tests nothing and weighting it lends false structure to an
+# arbitrary tweak.
+# --------------------------------------------------------------------------
+
+def scenario_traceability_finding(scenarios, pillars) -> Finding | None:
+    """Class A — a scenario that does not trace to a declared thesis pillar."""
+    declared = {p.name for p in pillars}
+    untraced = [s.name for s in scenarios if not s.pillars]
+    unknown = {s.name: sorted(set(s.pillars) - declared)
+               for s in scenarios if set(s.pillars) - declared}
+    if not untraced and not unknown:
+        return None
+
+    problems = []
+    if untraced:
+        problems.append(f"{', '.join(untraced)} cite no pillar")
+    for name, missing in unknown.items():
+        problems.append(f"{name} cites undeclared {missing}")
+    return Finding(
+        rule=rule("scenarios_not_traceable"),
+        detail=(f"{'; '.join(problems)}. Declared pillars are "
+                f"{sorted(declared) or 'none'}. A case built by tweaking "
+                f"inputs tests nothing, because nothing in it could have "
+                f"turned out differently for a nameable reason (4.10)"))
+
+
+def expected_value_measurement(scenario_set, currency: str = "") -> Measurement:
+    """The probability-weighted target, reported alongside the range (4.10).
+
+    What makes this idea rankable against another whose bull case is larger
+    but less likely -- which no single target price permits.
+    """
+    from src.valuation.money import quantize_price
+
+    return Measurement(
+        label=f"Probability-weighted expected value{f', {currency}' if currency else ''}",
+        value=quantize_price(scenario_set.expected_value), spec_ref="4.10")
+
+
+def scenario_findings(scenario_set) -> list[Finding]:
+    """Framework 4.10 rules against a built scenario set."""
+    finding = scenario_traceability_finding(
+        tuple(o.scenario for o in scenario_set.outcomes), scenario_set.pillars)
+    return [finding] if finding is not None else []

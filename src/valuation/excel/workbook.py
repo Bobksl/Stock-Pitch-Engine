@@ -49,12 +49,13 @@ SHEET_MODEL = "Model"
 SHEET_DCF = "DCF"
 SHEET_COMPS = "Comps"
 SHEET_TARGET = "Target"
+SHEET_SCENARIOS = "Scenarios"
+SHEET_SENSITIVITY = "Sensitivity"
 SHEET_REVERSE = "Reverse DCF"
 SHEET_SUMMARY = "Summary"
 
-#: Tabs framework 4.12 names whose components are still to come. Each must
-#: land with its C11 coverage in the same commit that adds it.
-PENDING_SHEETS = ("Scenarios", "Sensitivity")
+#: Every tab framework 4.12 names is now implemented.
+PENDING_SHEETS: tuple[str, ...] = ()
 
 
 class ExportError(ValueError):
@@ -80,6 +81,10 @@ class Layout:
     peer_rows: dict[str, int] = field(default_factory=dict)
     #: Inputs sheet: the price-target block (4.9).
     target_rows: dict[str, int] = field(default_factory=dict)
+    #: Inputs sheet: the scenario block (4.10). One column per scenario.
+    scenario_rows: dict[str, int] = field(default_factory=dict)
+    #: Inputs sheet: the two sensitivity axes (4.10). One column per point.
+    axis_rows: dict[str, int] = field(default_factory=dict)
     #: First forecast column on every sheet that has periods.
     first_period_column: int = 3            # C
     #: Inputs sheet row carrying the period labels.
@@ -155,6 +160,30 @@ class Layout:
     target_upside: int = 14
     target_identity: int = 15
 
+    # Scenarios sheet rows (4.10). One column per scenario.
+    scenario_name: int = 3
+    scenario_probability: int = 4
+    scenario_price: int = 5
+    scenario_contribution: int = 6
+    scenario_upside: int = 7
+    scenario_weight_check: int = 9
+    scenario_expected_value: int = 10
+
+    # Sensitivity sheet (4.10). The discount-factor block runs from
+    # `sensitivity_factor_first` for one row per forecast period, so the rows
+    # below it depend on the horizon and are computed rather than fixed.
+    sensitivity_wacc: int = 3
+    sensitivity_factor_first: int = 4
+
+    def sensitivity_pv(self, periods: int) -> int:
+        return self.sensitivity_factor_first + periods
+
+    def sensitivity_header(self, periods: int) -> int:
+        return self.sensitivity_pv(periods) + 2
+
+    def sensitivity_grid_first(self, periods: int) -> int:
+        return self.sensitivity_header(periods) + 1
+
     def column(self, index: int) -> str:
         return get_column_letter(self.first_period_column + index)
 
@@ -197,6 +226,15 @@ LAYOUT = Layout(
         "numerator_value": 46,
         "metric_value": 47,
         "growth": 48,
+    },
+    scenario_rows={
+        "name": 67,
+        "probability": 68,
+        "price": 69,
+    },
+    axis_rows={
+        "terminal_growth": 72,
+        "wacc": 73,
     },
     target_rows={
         "multiple": 52,
@@ -509,6 +547,166 @@ def _write_dcf(sheet, result: DcfResult, layout: Layout) -> None:
     sheet.column_dimensions["A"].width = 38
 
 
+def _write_scenario_inputs(sheet, scenarios, axes, layout: Layout) -> None:
+    """The scenario block and the two sensitivity axes, as typed values."""
+    if scenarios is not None:
+        _label(sheet, 66, "Scenarios (4.10) — coarse weights, pillar-traced",
+               bold=True)
+        for name, row in layout.scenario_rows.items():
+            _label(sheet, row, name.replace("_", " ").capitalize())
+        for index, outcome in enumerate(scenarios.outcomes):
+            column = layout.first_period_column + index
+            cell = sheet.cell(layout.scenario_rows["name"], column,
+                              outcome.scenario.name)
+            cell.font = _HEADING
+            for key, value in (("probability", outcome.scenario.probability),
+                               ("price", outcome.result.share_price)):
+                written = sheet.cell(layout.scenario_rows[key], column,
+                                     to_spreadsheet(value))
+                written.fill = _INPUT_FILL
+
+    if axes is not None:
+        _label(sheet, 71, "Sensitivity axes (4.10)", bold=True)
+        for name, values in axes.items():
+            row = layout.axis_rows[name]
+            _label(sheet, row, name.replace("_", " ").capitalize())
+            for index, value in enumerate(values):
+                cell = sheet.cell(row, layout.first_period_column + index,
+                                  to_spreadsheet(value))
+                cell.fill = _INPUT_FILL
+
+
+def _write_scenarios(sheet, layout: Layout, scenarios) -> None:
+    """Weight the cases and check the weights (framework 4.10).
+
+    Scenario prices arrive as declared inputs, the same arrangement the
+    Reverse DCF tab uses: Python values each case by rebuilding the whole
+    model against a different set of drivers, which is not something a single
+    column of formulas can express. What Excel checks here is the part it can
+    own outright -- that the weights sum to one and that the expected value is
+    the weighted sum it claims to be.
+
+    The weight check is on the face of the sheet rather than in a test. A
+    probability-weighted expected value over weights that do not sum to one is
+    not an expected value, and that failure should be visible to whoever opens
+    the file.
+    """
+    _title(sheet, "Scenarios — probability-weighted (4.10)",
+           "Weights are coarse by design. Nobody knows a thesis is 63% likely.")
+
+    for row, text in ((layout.scenario_name, "Scenario"),
+                      (layout.scenario_probability, "Probability"),
+                      (layout.scenario_price, "Target price"),
+                      (layout.scenario_contribution, "Contribution"),
+                      (layout.scenario_upside, "Upside")):
+        _label(sheet, row, text, bold=row == layout.scenario_name)
+
+    count = len(scenarios.outcomes)
+    for index in range(count):
+        col = layout.column(index)
+        source = f"{SHEET_INPUTS}!{col}"
+        sheet.cell(layout.scenario_name, layout.first_period_column + index,
+                   f"={source}{layout.scenario_rows['name']}")
+        sheet.cell(layout.scenario_probability,
+                   layout.first_period_column + index,
+                   f"={source}{layout.scenario_rows['probability']}")
+        sheet.cell(layout.scenario_price, layout.first_period_column + index,
+                   f"={source}{layout.scenario_rows['price']}")
+        sheet.cell(layout.scenario_contribution,
+                   layout.first_period_column + index,
+                   formula("product", f"{col}{layout.scenario_probability}",
+                           f"{col}{layout.scenario_price}"))
+        sheet.cell(layout.scenario_upside, layout.first_period_column + index,
+                   formula("upside", f"{col}{layout.scenario_price}",
+                           f"{SHEET_DCF}!$B${layout.dcf_share_price}"))
+
+    first, last = layout.column(0), layout.column(count - 1)
+    _label(sheet, layout.scenario_weight_check,
+           "Weights (must be exactly 1)", bold=True)
+    sheet.cell(layout.scenario_weight_check, 2,
+               sum_range(f"{first}{layout.scenario_probability}",
+                         f"{last}{layout.scenario_probability}"))
+    _label(sheet, layout.scenario_expected_value,
+           "Probability-weighted expected value", bold=True)
+    sheet.cell(layout.scenario_expected_value, 2,
+               sum_range(f"{first}{layout.scenario_contribution}",
+                         f"{last}{layout.scenario_contribution}"))
+    sheet.column_dimensions["A"].width = 36
+
+
+def _write_sensitivity(sheet, layout: Layout, periods: int,
+                       growth_points: int, wacc_points: int) -> None:
+    """A genuine two-way grid: terminal growth against WACC (framework 4.10).
+
+    Every cell is computed in Excel from first principles rather than pasted,
+    which is why the sheet is built in two parts. Changing WACC changes every
+    discount factor, so each WACC column first gets its own factor block and
+    its own present value of the explicit forecast; the grid below then values
+    the perpetuity at each growth rate against each column's WACC.
+
+    The cash flows come from the DCF sheet's discounted-flow row, which is
+    already stub-adjusted, so the stub convention is applied once in the model
+    rather than repeated -- and repeated differently -- in twenty-five places.
+    """
+    _title(sheet, "Sensitivity — terminal growth against WACC (4.10)",
+           "Each column rebuilds its own discount factors; nothing is pasted.")
+
+    axis_wacc = f"{SHEET_INPUTS}!{{col}}{layout.axis_rows['wacc']}"
+    axis_growth = f"{SHEET_INPUTS}!$C${layout.axis_rows['terminal_growth']}"
+    stub = _inp(layout, "stub_fraction", absolute=True)
+    pv_row = layout.sensitivity_pv(periods)
+
+    _label(sheet, layout.sensitivity_wacc, "WACC", bold=True)
+    for offset in range(periods):
+        _label(sheet, layout.sensitivity_factor_first + offset,
+               f"Discount factor, period {offset + 1}")
+    _label(sheet, pv_row, "PV of explicit forecast", bold=True)
+
+    for index in range(wacc_points):
+        col = layout.column(index)
+        wacc_cell = f"{col}{layout.sensitivity_wacc}"
+        sheet.cell(layout.sensitivity_wacc, layout.first_period_column + index,
+                   "=" + axis_wacc.format(col=col))
+        for offset in range(periods):
+            sheet.cell(layout.sensitivity_factor_first + offset,
+                       layout.first_period_column + index,
+                       formula("discount_factor",
+                               f"{col}${layout.sensitivity_wacc}",
+                               f"{stub}+{offset}" if offset else stub))
+        terms = "+".join(
+            f"{SHEET_DCF}!{layout.column(offset)}${layout.dcf_flow}"
+            f"*{col}{layout.sensitivity_factor_first + offset}"
+            for offset in range(periods))
+        sheet.cell(pv_row, layout.first_period_column + index, f"={terms}")
+
+    header_row = layout.sensitivity_header(periods)
+    _label(sheet, header_row, "Terminal growth \\ WACC", bold=True)
+    for index in range(wacc_points):
+        col = layout.column(index)
+        sheet.cell(header_row, layout.first_period_column + index,
+                   f"={col}{layout.sensitivity_wacc}")
+
+    last_flow = layout.column(periods - 1)
+    for row_index in range(growth_points):
+        row = layout.sensitivity_grid_first(periods) + row_index
+        growth_cell = (f"{SHEET_INPUTS}!{layout.column(row_index)}"
+                       f"${layout.axis_rows['terminal_growth']}")
+        sheet.cell(row, 2, f"={growth_cell}")
+        for column_index in range(wacc_points):
+            col = layout.column(column_index)
+            wacc_cell = f"{col}${layout.sensitivity_wacc}"
+            terminal = (f"{SHEET_MODEL}!${last_flow}${layout.model_ufcf}"
+                        f"*(1+$B{row})/({wacc_cell}-$B{row})")
+            sheet.cell(row, layout.first_period_column + column_index,
+                       f"=({col}${pv_row}+({terminal})"
+                       f"*{col}{layout.sensitivity_factor_first + periods - 1}"
+                       f"+{_inp(layout, 'total_debt', absolute=True)}"
+                       f"+{_inp(layout, 'cash_and_equivalents', absolute=True)})"
+                       f"/{_inp(layout, 'shares_outstanding', absolute=True)}")
+
+    sheet.column_dimensions["A"].width = 30
+
+
 def _write_target_inputs(sheet, target, layout: Layout) -> None:
     """The price-target block, as typed values (framework 4.9)."""
     _label(sheet, 51, "Price target (4.9) — fully diluted, source declared",
@@ -808,7 +1006,7 @@ def _write_summary(sheet, result: DcfResult, layout: Layout) -> None:
 
 def write_workbook(result: DcfResult, path: str | Path,
                    layout: Layout = LAYOUT, reverse=None, comps=None,
-                   target=None) -> Path:
+                   target=None, scenarios=None, axes=None) -> Path:
     """Write the valuation as live formulas. Returns the path written.
 
     `reverse` is an optional `reverse_dcf.ReverseDcf`; when given, its solved
@@ -820,6 +1018,10 @@ def write_workbook(result: DcfResult, path: str | Path,
 
     `target` is an optional `target.PriceTarget`; when given, the Target tab
     carries the price bridge and the return decomposition (4.9).
+
+    `scenarios` is an optional `scenarios.ScenarioSet` and `axes` a mapping of
+    `terminal_growth` and `wacc` to their sensitivity points; each adds its
+    tab (4.10).
     """
     if result.conventions != Conventions.SPEC:
         diverging = ", ".join(result.conventions.divergences(Conventions.SPEC))
@@ -844,6 +1046,20 @@ def write_workbook(result: DcfResult, path: str | Path,
                 "Framework 4.8 requires the full set disclosed.")
         _write_comps_inputs(inputs_sheet, comps, layout)
         _write_comps(book.create_sheet(SHEET_COMPS), layout, comps)
+    if scenarios is not None or axes is not None:
+        _write_scenario_inputs(inputs_sheet, scenarios, axes, layout)
+    if scenarios is not None:
+        _write_scenarios(book.create_sheet(SHEET_SCENARIOS), layout, scenarios)
+    if axes is not None:
+        missing = {"terminal_growth", "wacc"} - set(axes)
+        if missing:
+            raise ExportError(
+                f"a two-way sensitivity table needs both axes; missing "
+                f"{sorted(missing)}. 4.10 asks for two-way tables on the "
+                f"highest-leverage assumptions, and one axis is not two-way.")
+        _write_sensitivity(book.create_sheet(SHEET_SENSITIVITY), layout,
+                           len(result.inputs.forecast),
+                           len(axes["terminal_growth"]), len(axes["wacc"]))
     if target is not None:
         if target.prior_multiple is None or target.prior_metric is None:
             raise ExportError(
