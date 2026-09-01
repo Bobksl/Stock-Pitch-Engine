@@ -15,10 +15,11 @@ Several files in this repository claim authority and they do not agree. In order
    provenance model in §3 and §5. Where audit and spec disagree, the spec wins.
 3. **`PROGRESS.md`** — current state, decisions taken, and the gotchas that cost real time.
    Read it first in any session.
-4. `ARCHITECTURE.md`, `equity_filings_rag_architecture.md`, `project_guideline.md` —
-   **historical.** They describe the July 2026 Hong Kong RAG demo and call themselves
-   authoritative. They are not, for anything in phases 0–2. Useful for the rationale behind
-   the stack choices below and nothing else.
+
+Design notes from the July 2026 Hong Kong RAG demo are kept outside the repository. Some of
+them call themselves the authoritative build spec; none of them are, for anything in phases
+0–2. The rationale worth keeping from them — pgvector over Chroma, no orchestration
+framework — survives in the stack constraints below.
 
 ## Hard constraints — the framework ones
 
