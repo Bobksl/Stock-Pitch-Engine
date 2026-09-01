@@ -16,6 +16,7 @@ from src.qc.anchors import Anchor, CitationIndexError, parse_index
 from src.qc.cells import CellRegistry
 from src.qc.claims import NumericClaim, extract_claims
 from src.qc.external import ExternalRecord, load_records
+from src.qc.findings import FindingSet
 from src.qc.recency import SeriesFinding, check_recency
 from src.qc.resolve import Resolution, resolve_claim
 
@@ -31,6 +32,9 @@ class QCReport:
     recency: list[SeriesFinding] = field(default_factory=list)
     index: dict[str, Anchor] = field(default_factory=dict)
     externals_used: list[ExternalRecord] = field(default_factory=list)
+    #: Rule findings and always-reported measurements (P2.4, framework 6.5).
+    #: Empty for a Phase 1 draft check; populated once a valuation is attached.
+    rules: FindingSet = field(default_factory=FindingSet)
     fatal: str | None = None                # index/store unparseable
 
     @property
@@ -43,7 +47,13 @@ class QCReport:
 
     @property
     def passed(self) -> bool:
-        return not self.fatal and not self.failures and not self.stale
+        """One passing state (6.5).
+
+        A satisfied Class B finding does not create a second one: it is
+        already excluded from `rules.blocking` by its declared exception.
+        """
+        return (not self.fatal and not self.failures and not self.stale
+                and self.rules.passed)
 
     def render(self) -> str:
         lines: list[str] = []
@@ -66,6 +76,15 @@ class QCReport:
                 lines.append(f"  {finding.key.describe()}\n    {finding.detail}")
                 for claim, period in finding.stale:
                     lines.append(f"    line {claim.line}: {claim.text!r} ({period})")
+
+        rendered_rules = self.rules.render()
+        if rendered_rules:
+            lines.append("\n" + rendered_rules)
+
+        if self.rules.disclosures:
+            lines.append("\nPUBLISHED WITH THIS OUTPUT  — framework 6.5")
+            lines.append("-" * 72)
+            lines.extend("  " + d for d in self.rules.disclosures)
 
         if self.externals_used:
             lines.append("\nEXTERNAL SOURCES RELIED ON")
