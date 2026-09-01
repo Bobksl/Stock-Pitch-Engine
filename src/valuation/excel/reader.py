@@ -116,6 +116,11 @@ class WorkbookModel:
     conventions: Conventions
     formulas: dict[str, str]        # cell reference -> formula, for the audit
     published_price: Decimal | None
+    cell_map: CellMap = TSMC_CELL_MAP
+
+    def formula(self, ref: str) -> str:
+        """The formula at a cell, for quoting as evidence in a finding."""
+        return self.formulas.get(ref.upper(), "")
 
 
 def _literal(values, ref: str) -> Decimal:
@@ -223,6 +228,7 @@ def read_model(path, cell_map: CellMap = TSMC_CELL_MAP,
                   if isinstance(cell.value, str) and cell.value.startswith("=")},
         published_price=(_literal(values, published_price_cell)
                          if published_price_cell else None),
+        cell_map=m,
     )
 
 
