@@ -133,7 +133,7 @@ python -c "from src.valuation.excel.audit import audit_workbook; \
                                 published_price_cell='B27').render())"
 
 # verify a draft: every figure resolves, or it does not publish (needs Postgres)
-python scripts/verify_draft.py tests/fixtures/draft_msft_golden.md        --externals tests/fixtures/external_test.yaml
+python scripts/verify_draft.py tests/fixtures/draft_msft_golden.md --externals tests/fixtures/external_test.yaml
 
 # measure retrieval rather than trusting it
 python scripts/run_eval.py
