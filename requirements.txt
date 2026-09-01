@@ -33,3 +33,8 @@ lxml>=5.3
 # Excel valuation workbook (Phase 2, framework 4.12) — live formulas, two-way
 # interface. Python owns calculation; the workbook is read back, not trusted.
 openpyxl>=3.1
+
+# Excel/Python reconciliation (C11, framework 4.12). A pure-Python Excel
+# formula engine, so the check runs in CI with no binary. LibreOffice is the
+# stronger evidence and is used instead when present; see excel/recalc.py.
+formulas>=1.3

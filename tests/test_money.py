@@ -87,3 +87,24 @@ class TestPresentation:
     def test_as_percent_expresses_a_rate_in_points(self):
         assert as_percent(Decimal("0.031326761024511153")) == Decimal("3.13")
         assert as_percent(Decimal("0.8675001069948348")) == Decimal("86.75")
+
+
+class TestFloatSubclassesFromRecalculationEngines:
+    """A recalculation engine returns numpy scalars for some cells.
+
+    numpy.float64 subclasses float, so an isinstance check accepts it, and
+    under NumPy 2 its repr is "np.float64(1.5)" -- unparseable by Decimal.
+    Found by C11: one SUM cell came back as a numpy scalar and vanished from
+    the reconciliation while every other cell reconciled cleanly.
+    """
+
+    def test_a_numpy_scalar_converts_to_the_same_decimal_as_its_float(self):
+        numpy = pytest.importorskip("numpy")
+        for value in (6973.969509052895, 1.22, -1187.9, 0.0138):
+            assert from_spreadsheet(numpy.float64(value)) == from_spreadsheet(value)
+
+    def test_the_repr_that_would_have_broken_it(self):
+        numpy = pytest.importorskip("numpy")
+        scalar = numpy.float64(6973.969509052895)
+        assert isinstance(scalar, float)          # the trap
+        assert from_spreadsheet(scalar) == Decimal("6973.969509052895")

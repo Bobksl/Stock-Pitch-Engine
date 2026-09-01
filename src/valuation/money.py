@@ -69,6 +69,15 @@ def from_spreadsheet(value: Any) -> Decimal:
     of a Python float is the shortest string that round-trips, so it recovers
     the decimal literal the modeller typed rather than its binary expansion:
     `repr(1.22)` is "1.22", not "1.2199999999999999733546474089962430298328399658203125".
+
+    The `float(value)` coercion before `repr` is load-bearing, not decoration.
+    `numpy.float64` is a SUBCLASS of float, so an isinstance check waves it
+    through -- and under NumPy 2 its repr is "np.float64(6973.97)", which
+    Decimal cannot parse. A recalculation engine returns those for some cells
+    and plain floats for others, so without the coercion a reconciliation
+    silently loses whichever cells happened to come back as numpy scalars.
+    `float()` on a float subclass yields the identical double, so the coercion
+    costs nothing and closes the hole.
     """
     if isinstance(value, bool):
         raise PrecisionError(f"cell holds a bool ({value!r}), not a number")
@@ -79,7 +88,7 @@ def from_spreadsheet(value: Any) -> Decimal:
     if isinstance(value, float):
         if value != value or value in (float("inf"), float("-inf")):
             raise PrecisionError(f"cell holds a non-finite value ({value!r})")
-        return Decimal(repr(value))
+        return Decimal(repr(float(value)))
     if isinstance(value, str):
         return Decimal(value)
     raise PrecisionError(f"cell holds {type(value).__name__}, not a number")
@@ -122,3 +131,31 @@ def as_percent(value: Decimal, places: str = "0.01") -> Decimal:
     with localcontext() as ctx:
         ctx.prec = PRECISION
         return (value * 100).quantize(Decimal(places), rounding=ROUND_HALF_UP)
+
+
+def to_spreadsheet(value: Decimal) -> Decimal:
+    """The value as a workbook will actually hold it.
+
+    A spreadsheet stores binary64, so a 50-digit Decimal cannot survive a round
+    trip through one: the stub fraction 1/6 goes in with fifty digits and comes
+    back with sixteen. Rather than let that truncation happen silently inside
+    openpyxl, the export quantizes here, deliberately, and the reconciliation
+    then compares Python against Excel on identical inputs -- so a C11 failure
+    means a formula disagrees, never that the interface lost a digit.
+
+    Sixteen significant digits, because that is what openpyxl writes into the
+    sheet XML whatever it is handed. `repr(float(x))` would be the more obvious
+    choice and is wrong here: it yields seventeen digits for 1/6, openpyxl
+    rounds that to sixteen on the way out, and the value read back would differ
+    from the one this function returned. Matching the writer's own format is
+    what makes the round trip exact rather than approximately exact -- and an
+    exact round trip matters because the alternative is a tolerance, which
+    would then quietly absorb genuine transcription errors as well.
+
+    This is a float crossing, and the only one in the write direction. It is
+    the mirror of `from_spreadsheet` and exists for the same reason: the
+    boundary is real, so it gets a name instead of being incidental.
+    """
+    if not isinstance(value, Decimal):
+        raise PrecisionError(f"expected Decimal, got {type(value).__name__}")
+    return Decimal(f"{float(value):.16g}")
