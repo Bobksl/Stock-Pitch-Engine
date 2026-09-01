@@ -37,6 +37,22 @@ from src.valuation.inputs import (
 from src.valuation.money import D, from_spreadsheet
 
 
+#: Valuation methods and components a workbook may contain (framework 4.2,
+#: 4.7, 4.10). A CellMap declares which are present, because for a foreign
+#: workbook there is no reliable way to detect a comps tab or a scenario block
+#: by inspection -- the same reason every other field of a CellMap is declared
+#: rather than sniffed. Absence is the default, so an undescribed workbook is
+#: reported as a single-method model rather than silently assumed complete.
+COMPONENT_DCF = "dcf"
+COMPONENT_COMPS = "comparable_companies"
+COMPONENT_REVERSE_DCF = "reverse_dcf"
+COMPONENT_SCENARIOS = "scenarios"
+COMPONENT_SENSITIVITY = "sensitivity"
+
+VALUATION_COMPONENTS = (COMPONENT_DCF, COMPONENT_COMPS, COMPONENT_REVERSE_DCF,
+                        COMPONENT_SCENARIOS, COMPONENT_SENSITIVITY)
+
+
 class WorkbookError(ValueError):
     """The workbook does not match the supplied cell map."""
 
@@ -86,6 +102,13 @@ class CellMap:
     #: declares which cells are which rather than leaving it to a heuristic.
     trillion_scalars: tuple[str, ...] = ()
 
+    #: A gross-profit row, where the workbook models one. Its only use here is
+    #: to check whether anything references it (see WorkbookModel.dead_rows).
+    row_gross_profit: int | None = None
+
+    #: Which valuation components this workbook contains. DCF alone by default.
+    components: frozenset[str] = frozenset({COMPONENT_DCF})
+
 
 #: The layout of tests/fixtures/tsmc_model.xlsx. Data, not code: a second
 #: workbook is a second CellMap, not a second reader.
@@ -103,6 +126,10 @@ TSMC_CELL_MAP = CellMap(
     cell_equity_weight="B6", cell_terminal_value="B18",
     row_ufcf=14, row_discount_factor=15, row_discounted_ufcf=16,
     trillion_scalars=("market_capitalisation", "gross_debt"),
+    row_gross_profit=5,
+    # DCF only: no comps tab, no reverse DCF, no scenarios, no sensitivity
+    # table. "Assign 100% weight on DCF approach", in the model's own words.
+    components=frozenset({COMPONENT_DCF}),
 )
 
 _TRILLION_IN_BILLIONS = D(1000)
@@ -121,6 +148,32 @@ class WorkbookModel:
     def formula(self, ref: str) -> str:
         """The formula at a cell, for quoting as evidence in a finding."""
         return self.formulas.get(ref.upper(), "")
+
+    @property
+    def referenced_cells(self) -> set[str]:
+        """Every cell named by any formula in the workbook."""
+        return {ref for formula in self.formulas.values()
+                for ref in _refs(formula)}
+
+    def row_is_unreferenced(self, row: int) -> bool:
+        """Whether no formula outside `row` reads any cell of it.
+
+        A row computed for every period and read by nothing is a dead line: it
+        costs nothing today and silently diverges from the live model the
+        moment either is edited. The fixture's gross-profit row is one.
+        """
+        referenced = {ref for coordinate, formula in self.formulas.items()
+                      if not coordinate[1:].isdigit() or int(coordinate[1:]) != row
+                      for ref in _refs(formula)}
+        return not any(f"{col}{row}" in referenced
+                       for col in self.cell_map.columns)
+
+    @property
+    def dead_rows(self) -> tuple[int, ...]:
+        """Declared rows that the workbook computes and never reads."""
+        candidates = (self.cell_map.row_gross_profit,)
+        return tuple(row for row in candidates
+                     if row is not None and self.row_is_unreferenced(row))
 
 
 def _literal(values, ref: str) -> Decimal:

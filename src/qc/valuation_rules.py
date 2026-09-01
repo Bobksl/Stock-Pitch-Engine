@@ -387,3 +387,60 @@ def growth_sensitivity_measurements(result: DcfResult,
                           f"({as_percent(up.inputs.terminal_growth)}%), {currency}",
                     value=quantize_price(up.share_price), spec_ref="4.6"),
     ]
+
+
+# --------------------------------------------------------------------------
+# Completeness — defect 8 (framework 4.2, 4.7, 4.10). Class B.
+#
+# "Assign 100% weight on DCF approach" is the fixture's own note, and 4.2
+# forbids it: always triangulate, and explain why the methods disagree, because
+# the reconciliation is usually more informative than any single output.
+#
+# On a model whose valuation is 87% terminal value, a comps cross-check is not
+# a nicety. It is the only thing standing between the model and an
+# unfalsifiable number: every input to the perpetuity is an assumption, so
+# nothing inside the DCF can contradict the DCF.
+#
+# Class B rather than Class A, and the line is worth being careful about. A
+# single-method valuation is unusual, not arithmetically wrong -- there are
+# names with no usable comp set at all, and for those an exception is the
+# honest route. Nothing here says the number is incorrect.
+# --------------------------------------------------------------------------
+
+#: Framework 4.2: never assign 100% weight to a single method.
+MINIMUM_VALUATION_METHODS = 2
+
+_COMPONENT_NAMES = {
+    "dcf": "a DCF",
+    "comparable_companies": "comparable companies",
+    "reverse_dcf": "a reverse DCF",
+    "scenarios": "scenarios",
+    "sensitivity": "a sensitivity table",
+}
+
+
+def completeness_finding(model) -> Finding | None:
+    """Defect 8 — single-method valuation, and what else is missing."""
+    from src.valuation.excel.reader import VALUATION_COMPONENTS
+
+    present = set(model.cell_map.components)
+    missing = [c for c in VALUATION_COMPONENTS if c not in present]
+    dead = model.dead_rows
+
+    if len(present) >= MINIMUM_VALUATION_METHODS and not missing:
+        return None
+
+    detail = (
+        f"the valuation rests on "
+        f"{', '.join(_COMPONENT_NAMES.get(c, c) for c in sorted(present))} "
+        f"alone. 4.2 requires triangulation across at least "
+        f"{MINIMUM_VALUATION_METHODS} methods and forbids 100% weight on one. "
+        f"Missing: {', '.join(_COMPONENT_NAMES.get(c, c) for c in missing)}")
+    if dead:
+        rows = ", ".join(str(r) for r in dead)
+        detail += (f". Row {rows} is computed for every period and read by no "
+                   f"other formula -- a dead line, and a divergence risk the "
+                   f"moment either it or the live model is edited")
+    return Finding(rule=rule("single_method_valuation"), detail=detail,
+                   measured=Decimal(len(present)),
+                   threshold=Decimal(MINIMUM_VALUATION_METHODS))

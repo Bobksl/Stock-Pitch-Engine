@@ -35,6 +35,7 @@ from src.qc.exceptions import ExceptionRecord, load_exceptions
 from src.qc.findings import FindingSet, apply_exceptions
 from src.qc.external import load_records
 from src.qc.valuation_rules import (
+    completeness_finding,
     convention_findings,
     growth_sensitivity_measurements,
     provenance_findings,
@@ -126,7 +127,9 @@ def audit_workbook(path, cell_map: CellMap = TSMC_CELL_MAP,
     findings = apply_exceptions(
         convention_findings(model, as_built, tv_corrected)
         + provenance_findings(model.inputs, externals)
-        + threshold_findings(tv_corrected, as_built, sensitivity), exceptions)
+        + threshold_findings(tv_corrected, as_built, sensitivity)
+        + [f for f in (completeness_finding(model),) if f is not None],
+        exceptions)
 
     return WorkbookAudit(
         model=model, as_built=as_built, tv_corrected=tv_corrected, spec=spec,

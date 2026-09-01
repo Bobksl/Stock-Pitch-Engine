@@ -139,12 +139,14 @@ class TestSensitivityIsReportedWithEveryDcf:
 
 
 class TestTheClassBoundaryUnderRealFindings:
-    def test_seven_findings_five_class_a_two_class_b(self, audit):
-        by_class = {}
-        for finding in audit.rules.findings:
-            by_class.setdefault(finding.rule.rule_class, []).append(finding.rule.id)
-        assert len(by_class["correctness"]) == 5
-        assert sorted(by_class["model_shape"]) == sorted([DEFECTS[2], DEFECTS[3]])
+    def test_both_threshold_defects_are_class_b(self, audit):
+        """Scoped to these two rules; the audit's totals live in the
+        exit-criterion test, which is the only place that counts."""
+        threshold = {f.rule.id for f in audit.rules.findings
+                     if f.rule.id in (DEFECTS[2], DEFECTS[3])}
+        assert threshold == {DEFECTS[2], DEFECTS[3]}
+        assert all(f.rule.rule_class == CLASS_B for f in audit.rules.findings
+                   if f.rule.id in threshold)
 
     def test_an_exception_moves_one_finding_and_leaves_the_rest(self, tsmc_workbook):
         excepted = audit_workbook(
