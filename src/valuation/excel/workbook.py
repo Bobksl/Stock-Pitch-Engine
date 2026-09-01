@@ -25,7 +25,7 @@ job and the whole point of the audit), but emitting formulas that implement a
 terminal value built from an already-discounted cash flow would be shipping
 the defect, and a file that leaves this repository should not contain one.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
 
@@ -42,10 +42,11 @@ SHEET_INPUTS = "Inputs"
 SHEET_WACC = "WACC"
 SHEET_MODEL = "Model"
 SHEET_DCF = "DCF"
+SHEET_REVERSE = "Reverse DCF"
 SHEET_SUMMARY = "Summary"
 
-#: Tabs framework 4.12 names that arrive with their components at P2.10.
-#: Each must land with its C11 coverage in the same commit.
+#: Tabs framework 4.12 names whose components are still to come. Each must
+#: land with its C11 coverage in the same commit that adds it.
 PENDING_SHEETS = ("Comps", "Scenarios", "Sensitivity")
 
 
@@ -61,6 +62,11 @@ class Layout:
     scalar_rows: dict[str, int]
     #: Inputs sheet: driver name -> row, one column per forecast period.
     driver_rows: dict[str, int]
+    #: Inputs sheet: reverse-DCF quantities. Solved in Python and written here
+    #: as literals so the workbook can CHECK the solution rather than restate
+    #: it -- Excel recomputes the price from the implied assumption, and it
+    #: must come back equal to the market price.
+    reverse_rows: dict[str, int] = field(default_factory=dict)
     #: First forecast column on every sheet that has periods.
     first_period_column: int = 3            # C
     #: Inputs sheet row carrying the period labels.
@@ -99,6 +105,17 @@ class Layout:
     dcf_equity_value: int = 13
     dcf_share_price: int = 14
 
+    # Reverse DCF sheet rows (4.7)
+    reverse_market_price: int = 3
+    reverse_implied_growth: int = 4
+    reverse_pv_forecast: int = 6
+    reverse_terminal_value: int = 7
+    reverse_pv_terminal: int = 8
+    reverse_enterprise_value: int = 9
+    reverse_equity_value: int = 10
+    reverse_share_price: int = 11
+    reverse_residual: int = 12
+
     def column(self, index: int) -> str:
         return get_column_letter(self.first_period_column + index)
 
@@ -126,6 +143,10 @@ LAYOUT = Layout(
         "capex": 30,
         "change_in_nwc": 31,
     },
+    reverse_rows={
+        "market_price": 34,
+        "implied_terminal_growth": 35,
+    },
 )
 
 _SCALAR_LABELS = {
@@ -142,6 +163,11 @@ _SCALAR_LABELS = {
     "shares_outstanding": "Shares outstanding (fully diluted)",
     "stub_fraction": "Stub fraction of first period",
     "base_revenue": "Base period revenue",
+}
+
+_REVERSE_LABELS = {
+    "market_price": "Market price today",
+    "implied_terminal_growth": "Implied terminal growth (solved in Python)",
 }
 
 _DRIVER_LABELS = {
@@ -182,9 +208,9 @@ def _write_inputs(sheet, result: DcfResult, layout: Layout) -> None:
                       (23, "Explicit forecast — the Section 3 bridge (4.5)")):
         _label(sheet, row, text, bold=True)
 
-    for field, row in layout.scalar_rows.items():
-        _label(sheet, row, _SCALAR_LABELS[field])
-        cell = sheet.cell(row, 2, to_spreadsheet(getattr(inputs, field)))
+    for name, row in layout.scalar_rows.items():
+        _label(sheet, row, _SCALAR_LABELS[name])
+        cell = sheet.cell(row, 2, to_spreadsheet(getattr(inputs, name)))
         cell.fill = _INPUT_FILL
 
     _label(sheet, layout.period_row, "Period", bold=True)
@@ -194,24 +220,40 @@ def _write_inputs(sheet, result: DcfResult, layout: Layout) -> None:
         cell.font = _HEADING
         cell.alignment = Alignment(horizontal="right")
 
-    for field, row in layout.driver_rows.items():
-        _label(sheet, row, _DRIVER_LABELS[field])
+    for name, row in layout.driver_rows.items():
+        _label(sheet, row, _DRIVER_LABELS[name])
         for index, year in enumerate(inputs.forecast):
             cell = sheet.cell(row, layout.first_period_column + index,
-                              to_spreadsheet(getattr(year, field)))
+                              to_spreadsheet(getattr(year, name)))
             cell.fill = _INPUT_FILL
 
     sheet.column_dimensions["A"].width = 42
 
 
-def _inp(layout: Layout, field: str, absolute: bool = False) -> str:
-    row = layout.scalar_rows[field]
+def _write_reverse_inputs(sheet, reverse, layout) -> None:
+    """The solved reverse-DCF quantities, written as literals to be checked."""
+    _label(sheet, 33, "Reverse DCF (4.7) — solved in Python, checked in Excel",
+           bold=True)
+    values = {"market_price": reverse.market_price,
+              "implied_terminal_growth": reverse.terminal_growth.value}
+    for name, row in layout.reverse_rows.items():
+        _label(sheet, row, _REVERSE_LABELS[name])
+        cell = sheet.cell(row, 2, to_spreadsheet(values[name]))
+        cell.fill = _INPUT_FILL
+
+
+def _rev(layout: Layout, name: str) -> str:
+    return f"{SHEET_INPUTS}!B{layout.reverse_rows[name]}"
+
+
+def _inp(layout: Layout, name: str, absolute: bool = False) -> str:
+    row = layout.scalar_rows[name]
     return f"{SHEET_INPUTS}!{'$B$' if absolute else 'B'}{row}"
 
 
-def _driver(layout: Layout, field: str, index: int) -> str:
+def _driver(layout: Layout, name: str, index: int) -> str:
     return (f"{SHEET_INPUTS}!{layout.column(index)}"
-            f"{layout.driver_rows[field]}")
+            f"{layout.driver_rows[name]}")
 
 
 def _write_wacc(sheet, layout: Layout) -> None:
@@ -364,6 +406,66 @@ def _write_dcf(sheet, result: DcfResult, layout: Layout) -> None:
     sheet.column_dimensions["A"].width = 38
 
 
+def _write_reverse(sheet, layout: Layout, periods: int) -> None:
+    """Recompute the price at the implied assumption; it must equal the market.
+
+    The tab does not restate Python's answer -- it CHECKS it. Python solves for
+    the terminal growth rate today's price implies; this sheet takes that rate
+    as an input, rebuilds the valuation around it, and the residual on the last
+    row is Excel's verdict on whether the solve was right. A pasted "implied
+    growth: 2.35%" would assert the result; this interrogates it.
+
+    Only the terminal branch is rebuilt. The explicit forecast's present value
+    does not depend on g at all, so it is referenced from the DCF sheet rather
+    than duplicated -- a second copy would be a second thing to drift.
+    """
+    _title(sheet, "Reverse DCF — what today's price already assumes (4.7)",
+           "The residual on the last row is Excel checking Python's solve.")
+    last = layout.column(periods - 1)
+    wacc = f"{SHEET_WACC}!$B${layout.wacc_value}"
+    growth = _rev(layout, "implied_terminal_growth")
+
+    rows = {
+        layout.reverse_market_price: (
+            "Market price today", f"={_rev(layout, 'market_price')}"),
+        layout.reverse_implied_growth: (
+            "Implied terminal growth", f"={growth}"),
+        layout.reverse_pv_forecast: (
+            "PV of explicit forecast (independent of g)",
+            f"={SHEET_DCF}!B{layout.dcf_pv_forecast}"),
+        layout.reverse_terminal_value: (
+            "Terminal value at the implied growth",
+            formula("perpetuity", f"{SHEET_MODEL}!{last}{layout.model_ufcf}",
+                    growth, wacc)),
+        layout.reverse_pv_terminal: (
+            "PV of terminal value",
+            formula("product", f"B{layout.reverse_terminal_value}",
+                    f"{SHEET_DCF}!{last}{layout.dcf_factor}")),
+        layout.reverse_enterprise_value: (
+            "Enterprise value",
+            formula("sum", f"B{layout.reverse_pv_forecast}",
+                    f"B{layout.reverse_pv_terminal}")),
+        layout.reverse_equity_value: (
+            "Equity value",
+            formula("sum", f"B{layout.reverse_enterprise_value}",
+                    _inp(layout, "total_debt"),
+                    _inp(layout, "cash_and_equivalents"))),
+        layout.reverse_share_price: (
+            "Implied share price",
+            formula("ratio", f"B{layout.reverse_equity_value}",
+                    _inp(layout, "shares_outstanding"))),
+        layout.reverse_residual: (
+            "Residual against the market price",
+            formula("difference", f"B{layout.reverse_share_price}",
+                    f"B{layout.reverse_market_price}")),
+    }
+    for row, (label, cell_formula) in rows.items():
+        _label(sheet, row, label,
+               bold=row in (layout.reverse_share_price, layout.reverse_residual))
+        sheet.cell(row, 2, cell_formula)
+    sheet.column_dimensions["A"].width = 42
+
+
 def _write_summary(sheet, result: DcfResult, layout: Layout) -> None:
     inputs = result.inputs
     _title(sheet, f"Summary — {inputs.currency} {inputs.unit}",
@@ -388,8 +490,13 @@ def _write_summary(sheet, result: DcfResult, layout: Layout) -> None:
 
 
 def write_workbook(result: DcfResult, path: str | Path,
-                   layout: Layout = LAYOUT) -> Path:
-    """Write the valuation as live formulas. Returns the path written."""
+                   layout: Layout = LAYOUT, reverse=None) -> Path:
+    """Write the valuation as live formulas. Returns the path written.
+
+    `reverse` is an optional `reverse_dcf.ReverseDcf`; when given, its solved
+    terminal growth is written to `Inputs` and the Reverse DCF tab rebuilds the
+    valuation around it so that Excel checks the solve (4.7).
+    """
     if result.conventions != Conventions.SPEC:
         diverging = ", ".join(result.conventions.divergences(Conventions.SPEC))
         raise ExportError(
@@ -405,6 +512,14 @@ def write_workbook(result: DcfResult, path: str | Path,
     _write_wacc(book.create_sheet(SHEET_WACC), layout)
     _write_model(book.create_sheet(SHEET_MODEL), result, layout)
     _write_dcf(book.create_sheet(SHEET_DCF), result, layout)
+    if reverse is not None:
+        if reverse.terminal_growth is None:
+            raise ExportError(
+                "the reverse DCF has no solved terminal growth, so the tab "
+                "would have nothing to check. Report it as unsolved instead.")
+        _write_reverse_inputs(inputs_sheet, reverse, layout)
+        _write_reverse(book.create_sheet(SHEET_REVERSE), layout,
+                       len(result.inputs.forecast))
     _write_summary(book.create_sheet(SHEET_SUMMARY), result, layout)
 
     path = Path(path)
