@@ -25,3 +25,19 @@ data/edgar_cache/
 # Licensed external data (Bloomberg BEst, market data). Locally auditable,
 # never redistributed: this repository is public. See src/qc/external.py.
 data/external/
+
+# Licensed terminal data. Bloomberg exports carry an explicit no-redistribution
+# notice and this repository is public; scripts/pre-commit blocks these paths
+# even against `git add -f`. Install it with:
+#     git config core.hooksPath scripts
+data/bloomberg/
+*.bbg
+Case Study*/
+grid*.xlsx
+ECFC*.xlsx
+
+# Generated workbooks and exports. Python owns the calculation (framework 4.12);
+# a committed workbook is a stale copy of a computed artifact.
+exports/
+*.xlsx.tmp
+~$*.xlsx

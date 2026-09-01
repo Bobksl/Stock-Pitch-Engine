@@ -1,0 +1,32 @@
+name: tests
+
+on:
+  push:
+    branches: [main, "phase-*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        # sentence-transformers pulls torch, which is large and only needed by
+        # the embedding path. The suite skips those tests without a database
+        # anyway, so CI installs the rest and lets them skip.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest openpyxl formulas lxml pyyaml python-dotenv
+
+      - name: Run the suite
+        # C11 is NOT skippable: the `formulas` engine is installed above, and
+        # tests/test_excel_reconciliation.py fails loudly if no engine is
+        # available rather than passing quietly.
+        run: python -m pytest -q
