@@ -159,3 +159,142 @@ def wacc_growth_spread_measurement(result: DcfResult) -> Measurement:
         label="WACC less terminal growth",
         value=as_percent(result.spread_to_terminal_growth), unit="pp",
         spec_ref="4.6", threshold=as_percent(WACC_GROWTH_SPREAD_FLOOR))
+
+
+# --------------------------------------------------------------------------
+# Provenance rules — defects 4 and 5 (framework 6.4, 4.4, 4.6)
+#
+# Neither defect is visible in any arithmetic. 0.0445 is a perfectly ordinary
+# number to multiply by, and 1.22 is a perfectly ordinary beta; nothing about
+# either computation is unusual. What is missing is a declaration of where the
+# number came from, so both resolve through the provenance machinery Phase 1
+# already built rather than through anything new.
+#
+# The unit vocabulary below is the one implementation choice here that the
+# framework does not spell out. 6.4 requires a declared unit and says scale is
+# read and never inferred; it does not enumerate the units a rate may carry.
+# A closed pair of tuples keeps the check honest -- an unrecognised unit fails
+# rather than passing by default, which is the whole point of not inferring.
+# --------------------------------------------------------------------------
+
+#: A growth rate that may be applied to nominal cash flows.
+NOMINAL_RATE_UNITS = ("nominal_rate", "nominal_growth", "nominal_gdp_growth")
+#: A growth rate that may not. Applying one to nominal flows is defect 4.
+REAL_RATE_UNITS = ("real_rate", "real_growth", "real_gdp_growth")
+
+
+def _handle(inputs, field: str) -> tuple[str, str] | None:
+    """Split a provenance handle into (kind, key), or None if undeclared."""
+    raw = inputs.provenance.get(field)
+    if not raw:
+        return None
+    kind, _, key = str(raw).partition(":")
+    return (kind, key) if key else ("", str(raw))
+
+
+def terminal_growth_provenance_finding(inputs, externals: dict | None = None
+                                       ) -> Finding | None:
+    """Defect 4 — a real growth rate applied to nominal cash flows.
+
+    The DCF discounts nominal cash flows, so the perpetuity growth rate must be
+    nominal too. A real GDP figure is a unit mismatch in either direction, and
+    no amount of recomputation reveals it: the arithmetic is identical. Only a
+    declared unit can settle it.
+    """
+    externals = externals or {}
+    growth = as_percent(inputs.terminal_growth)
+    handle = _handle(inputs, "terminal_growth")
+
+    if handle is None:
+        return Finding(
+            rule=rule("real_growth_on_nominal_flows"),
+            detail=(
+                f"terminal growth {growth}% carries no declared provenance, so "
+                f"it cannot be shown to be a nominal rate. The forecast "
+                f"discounts nominal cash flows; a real rate here is a unit "
+                f"mismatch that no recomputation would reveal"),
+            measured=inputs.terminal_growth)
+
+    kind, key = handle
+    if kind != "ext":
+        # A derived or facts-table figure carries its unit through Phase 1's
+        # resolver, which checks unit compatibility already.
+        return None
+
+    record = externals.get(key)
+    if record is None:
+        return Finding(
+            rule=rule("real_growth_on_nominal_flows"),
+            detail=(f"terminal growth {growth}% cites external record {key!r}, "
+                    f"which is not in the store"),
+            measured=inputs.terminal_growth)
+
+    if record.unit in REAL_RATE_UNITS:
+        return Finding(
+            rule=rule("real_growth_on_nominal_flows"),
+            detail=(
+                f"terminal growth {growth}% is declared as {record.unit!r} "
+                f"({record.source}) and applied to nominal cash flows. Use a "
+                f"nominal long-run growth rate, or deflate the forecast"),
+            measured=inputs.terminal_growth)
+
+    if record.unit not in NOMINAL_RATE_UNITS:
+        return Finding(
+            rule=rule("real_growth_on_nominal_flows"),
+            detail=(
+                f"terminal growth {growth}% is declared with unit "
+                f"{record.unit!r}, which is neither nominal nor real. Scale and "
+                f"unit are read, never inferred (6.4); legal nominal units are "
+                f"{NOMINAL_RATE_UNITS}"),
+            measured=inputs.terminal_growth)
+
+    return None
+
+
+def beta_provenance_finding(inputs, externals: dict | None = None
+                            ) -> Finding | None:
+    """Defect 5 — beta taken from a terminal rather than computed.
+
+    Note what is and is not prohibited. `external.py` legitimately permits a
+    `beta_input` record: regression inputs and peer betas are exactly the kind
+    of thing the facts table cannot answer, and they SHOULD be declared that
+    way. The violation is using such a record *directly as the beta* instead of
+    as an input to a computation. 4.4 requires the beta derived -- peer-median
+    unlevered, relevered to target structure, with a regression beta computed
+    alongside and the spread shown -- and a derived figure is a model cell.
+    """
+    externals = externals or {}
+    handle = _handle(inputs, "beta")
+
+    if handle is None:
+        return Finding(
+            rule=rule("beta_not_derived"),
+            detail=(
+                f"beta {inputs.beta} carries no declared provenance. 4.4 "
+                f"requires it computed both ways -- peer-median unlevered "
+                f"relevered to target structure, and a regression beta "
+                f"alongside, with the spread shown -- not asserted"),
+            measured=inputs.beta)
+
+    kind, key = handle
+    if kind == "ext":
+        record = externals.get(key)
+        source = f" ({record.source})" if record is not None else ""
+        return Finding(
+            rule=rule("beta_not_derived"),
+            detail=(
+                f"beta {inputs.beta} is taken directly from external record "
+                f"{key!r}{source}. A beta_input record is an INPUT to a beta "
+                f"computation, not the beta: 4.4 requires peer-median "
+                f"unlevered relevered, with the regression beta and the spread "
+                f"reported alongside"),
+            measured=inputs.beta)
+
+    return None
+
+
+def provenance_findings(inputs, externals: dict | None = None) -> list[Finding]:
+    """Defects 4 and 5: figures whose problem is what was never declared."""
+    candidates = (terminal_growth_provenance_finding(inputs, externals),
+                  beta_provenance_finding(inputs, externals))
+    return [f for f in candidates if f is not None]

@@ -33,8 +33,10 @@ from dataclasses import dataclass, replace
 
 from src.qc.exceptions import ExceptionRecord, load_exceptions
 from src.qc.findings import FindingSet, apply_exceptions
+from src.qc.external import load_records
 from src.qc.valuation_rules import (
     convention_findings,
+    provenance_findings,
     terminal_value_share_measurement,
     wacc_growth_spread_measurement,
 )
@@ -95,6 +97,7 @@ class WorkbookAudit:
 def audit_workbook(path, cell_map: CellMap = TSMC_CELL_MAP,
                    published_price_cell: str | None = None,
                    exceptions: dict[str, ExceptionRecord] | str | None = None,
+                   externals: dict | str | None = None,
                    as_of=None) -> WorkbookAudit:
     """Read a workbook, reproduce it, and evaluate framework 4 against it."""
     model = read_model(path, cell_map, published_price_cell=published_price_cell)
@@ -108,9 +111,12 @@ def audit_workbook(path, cell_map: CellMap = TSMC_CELL_MAP,
 
     if not isinstance(exceptions, dict):
         exceptions = load_exceptions(exceptions)
+    if not isinstance(externals, dict):
+        externals = load_records(externals)
 
     findings = apply_exceptions(
-        convention_findings(model, as_built, tv_corrected), exceptions)
+        convention_findings(model, as_built, tv_corrected)
+        + provenance_findings(model.inputs, externals), exceptions)
 
     return WorkbookAudit(
         model=model, as_built=as_built, tv_corrected=tv_corrected, spec=spec,

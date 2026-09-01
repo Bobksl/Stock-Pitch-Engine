@@ -23,7 +23,8 @@ TODAY = date(2026, 9, 1)
 @pytest.fixture(scope="module")
 def audit(request):
     workbook = request.path.parent / "fixtures" / "tsmc_model.xlsx"
-    return audit_workbook(workbook, published_price_cell="B27", as_of=TODAY)
+    return audit_workbook(workbook, published_price_cell="B27", externals={},
+                          as_of=TODAY)
 
 
 class TestReproductionComesFirst:
@@ -44,17 +45,28 @@ class TestReproductionComesFirst:
 
 
 class TestTheThreeConventionDefects:
-    def test_exactly_three_findings_and_all_are_class_a(self, audit):
-        assert len(audit.rules.findings) == 3
-        assert {f.rule.rule_class for f in audit.rules.findings} == {CLASS_A}
+    """Scoped to the convention rules on purpose.
+
+    The audit's *total* finding count grows with every later step, so asserting
+    an exact total here would make these tests churn for reasons unrelated to
+    what they check. Exactly-eight belongs in the acceptance test, once.
+    """
+
+    def test_the_three_convention_findings_are_class_a(self, audit):
+        findings = convention_findings(audit.model, audit.as_built,
+                                       audit.tv_corrected)
+        assert len(findings) == 3
+        assert {f.rule.rule_class for f in findings} == {CLASS_A}
 
     def test_they_are_defects_one_six_and_seven(self, audit):
-        found = {f.rule.id for f in audit.rules.findings}
-        assert found == {DEFECTS[1], DEFECTS[6], DEFECTS[7]}
+        findings = convention_findings(audit.model, audit.as_built,
+                                       audit.tv_corrected)
+        assert {f.rule.id for f in findings} == {DEFECTS[1], DEFECTS[6], DEFECTS[7]}
 
     def test_the_audit_blocks(self, audit):
         assert audit.passed is False
-        assert len(audit.rules.blocking) == 3
+        blocking = {f.rule.id for f in audit.rules.blocking}
+        assert {DEFECTS[1], DEFECTS[6], DEFECTS[7]} <= blocking
         assert audit.rules.excepted == []
 
     def _detail(self, audit, defect: int) -> str:
@@ -144,6 +156,8 @@ class TestClassAResistsAnExceptionStore:
           expiry: 2027-08-31
         """
         with_store = audit_workbook(tsmc_workbook, published_price_cell="B27",
-                                    exceptions=store, as_of=TODAY)
+                                    exceptions=store, externals={}, as_of=TODAY)
         assert with_store.passed is False
-        assert len(with_store.rules.blocking) == 3
+        assert with_store.rules.excepted == []
+        assert all(f.rule.rule_class == CLASS_A
+                   for f in with_store.rules.blocking)
