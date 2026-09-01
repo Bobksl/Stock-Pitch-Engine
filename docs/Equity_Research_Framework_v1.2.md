@@ -1,11 +1,16 @@
-# AI Equity Research Framework — v1.1
+# AI Equity Research Framework — v1.2
 
-**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-08-31
+**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-01
 **Scope:** US-listed equities (SEC EDGAR), position horizon (months–quarters), IT sector first
 **Output:** Polished shareable pitch + auditable Excel valuation model
 **Mode:** Interactive co-pilot, section by section
 
 ## Changelog
+
+**v1.2 — 2026-09-01**
+
+- **§4.5** — stub-period discounting convention stated explicitly, and **§4.13** — the matching Class A rule added. Phase 2 found the gap while enumerating the rule registry: the defect is required to be flagged and Class A by the Phase 2 exit criterion, but no §4.13 rule covered it. The audit's §2.10 mapping table asserts every one of its findings is caught by an existing rule and omits this one, so the claim was false rather than the rule merely unwritten.
+- **§4.13** — beta sourced from a terminal listed as its own Class A rule. §4.13 previously named only "WACC copied from a terminal"; §4.4 states the beta policy in its own right, and the two are separately detectable and separately reported.
 
 **v1.1 — 2026-08-31**
 
@@ -282,6 +287,8 @@ DCF-led for growth and margin stories; comps-led for re-rating; normalised / mid
 ### 4.5 Forecast Drivers — Hard Linkage
 **The DCF's forecast drivers ARE the Section 3 bridge.** Not new assumptions. If modelled revenue growth does not equal the bridge components summed, one is wrong. Automated check (§8).
 
+**Stub periods.** A valuation struck part-way through a period discounts a **pro-rated slice** of that period's cash flow at the matching partial-period factor. Either count the fraction of the period that remains, or discount a full period at a full-period factor — never a full period of cash flow at a partial-period factor, which collects a year of cash for a month of waiting. Class A: this is an arithmetic error, not a modelling preference.
+
 ### 4.6 Terminal Value Discipline
 - Perpetuity growth ≤ long-run **nominal** GDP. *Do not apply a real growth rate to nominal cash flows.*
 - Always cross-check the implied exit multiple against comps and the company's own history
@@ -374,8 +381,10 @@ Each rule carries a class (§6.5). **Class A is never exceptionable**; Class B m
 
 - Any LLM-computed arithmetic
 - WACC copied from a terminal rather than derived *(a sourcing violation, not a shape heuristic)*
+- Beta taken from a terminal rather than computed and relevered (§4.4)
 - **Terminal value computed from an already-discounted cash flow** (see Audit §2)
 - Real growth rate applied to nominal cash flows
+- **Stub-period discounting that counts a full period of cash flow** (§4.5)
 - Unit or scale mismatch; scale undeclared
 - Unresolvable figure
 - Numerator/denominator pairing violation

@@ -32,13 +32,19 @@ later reference in that document is offset by one.
 
 A note on completeness
 ----------------------
-`stub_period_overstates_cash_flow` has no rule in framework 4.13. The audit's
-section 2.10 mapping table asserts that every one of its findings is caught by
-a rule already in the framework, but it omits its own finding 6 (the stub),
-and 4.13's Class A list contains nothing covering it. The exit criterion
-nevertheless requires the defect flagged, and Class A, so it is registered
-here against 4.5/4.6 and 4.13 needs an amendment to match. Raised rather than
-quietly absorbed: the spec is a tracked artifact and this is a real hole in it.
+Two rules here were absent from framework 4.13 when Phase 2 began, and both
+were added to the spec at v1.2 rather than carried as local extensions.
+
+`stub_period_overstates_cash_flow` had no rule at all: the audit's section
+2.10 mapping table asserts every one of its findings is caught by an existing
+rule, but omits its own finding 6 (the stub), and 4.13's Class A list covered
+nothing like it. The exit criterion requires the defect flagged and Class A,
+so the claim was false rather than the rule merely unwritten. v1.2 states the
+stub convention in 4.5 and adds the matching Class A rule.
+
+`beta_not_derived` was folded into "WACC copied from a terminal". 4.4 states
+the beta policy in its own right, and the two are separately detectable and
+separately reported, so v1.2 lists them separately.
 """
 from dataclasses import dataclass
 
