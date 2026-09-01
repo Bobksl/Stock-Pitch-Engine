@@ -1,6 +1,6 @@
 # Stock Pitch Engine
 
-[![tests](https://github.com/Bobksl/Equity-Filings-RAG/actions/workflows/tests.yml/badge.svg)](https://github.com/Bobksl/Equity-Filings-RAG/actions/workflows/tests.yml)
+[![tests](https://github.com/Bobksl/stock-pitch-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/Bobksl/stock-pitch-engine/actions/workflows/tests.yml)
 
 A research pipeline that produces equity pitches in which **every number is verified against
 the filing it came from**. Not a filings reader — a deterministic quality gate with a

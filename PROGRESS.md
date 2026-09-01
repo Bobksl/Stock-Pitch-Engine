@@ -137,12 +137,15 @@ explicit forecast.
   pytest with `formulas` installed so C11 actually runs rather than skipping. Tags
   `v0.1-phase-0`, `v0.2-phase-1` created; phase 2 gets its tag on the merge commit.
   Install the hook in a fresh clone with `git config core.hooksPath scripts`.
-- **B1 rename** ⬜ **NEEDS A HUMAN.** Rename on GitHub (Settings → Repository name →
-  `stock-pitch-engine`), then `git remote set-url origin
-  https://github.com/Bobksl/stock-pitch-engine.git`, then change the badge URL on README
-  line 3. GitHub redirects the old URL, so nothing breaks in the meantime.
+- **B1 rename** ✅ `Equity-Filings-RAG` → `stock-pitch-engine` (2026-09-02). Remote and CI
+  badge updated. Three references to the old name remain on purpose — a July session log in
+  this file, `docs/PHASE1_HANDOVER.md`, and the audit's §4 heading — because they are
+  historical records and rewriting them to a name that did not exist then would falsify the
+  record. GitHub redirects the old URL indefinitely.
 
-**Nothing is pushed.** 21 commits on `phase-2-valuation`, plus two tags.
+**Pushed.** `main` at the Phase 2 merge, `phase-2-valuation`, and tags `v0.1-phase-0`,
+`v0.2-phase-1`, `v0.3-phase-2` — each on its phase merge commit, so the phase structure is
+legible from `git log` alone.
 
 ### Live case study: AVGO (data review, 2026-09-02)
 `../Case Study - AVGO Stock Pitch/` (OUTSIDE the repo, and it must stay there — the DES PDF
