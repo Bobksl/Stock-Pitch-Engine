@@ -22,11 +22,29 @@ significant digits, so we are strictly more precise than the artifact we
 reconcile against in C11, and our own rounding can never be the explanation
 for a divergence at the 1e-9 relative tolerance that test uses.
 """
-from decimal import Decimal, ROUND_HALF_UP, localcontext
+from decimal import Decimal, ROUND_HALF_UP, getcontext, localcontext
 from typing import Any
 
 #: Significant digits for every valuation computation. See module docstring.
 PRECISION = 50
+
+# Set on the ambient context, not only inside `divide` and `power`.
+#
+# This was a real bug and a quiet one. Those two helpers opened a local
+# context at PRECISION, but every plain `+`, `-` and `*` in the engine ran at
+# Decimal's 28-digit default -- so the 50 digits this module advertises applied
+# to division alone. It surfaced as a return decomposition whose three terms
+# summed to the price change with a residual of 1e-26 rather than the 1e-47 the
+# arithmetic should have produced, which is the sort of discrepancy that looks
+# like rounding and is actually a silent precision boundary.
+#
+# Setting the process context is global state, and that is a real cost: an
+# application importing this package gets 50-digit Decimals everywhere. It is
+# accepted deliberately. The alternative -- wrapping every expression in the
+# engine in a context manager -- puts the invariant in dozens of places where
+# one omission restores the bug silently, and a claim about precision that
+# holds in most of the code is not a claim worth making.
+getcontext().prec = PRECISION
 
 #: Published share prices are quoted to the cent. Reproduction of a target
 #: price is asserted at this quantum, not bit-for-bit: Excel's binary64 and a

@@ -48,6 +48,7 @@ SHEET_WACC = "WACC"
 SHEET_MODEL = "Model"
 SHEET_DCF = "DCF"
 SHEET_COMPS = "Comps"
+SHEET_TARGET = "Target"
 SHEET_REVERSE = "Reverse DCF"
 SHEET_SUMMARY = "Summary"
 
@@ -77,6 +78,8 @@ class Layout:
     comps_rows: dict[str, int] = field(default_factory=dict)
     #: Inputs sheet: per-peer rows, one column per peer.
     peer_rows: dict[str, int] = field(default_factory=dict)
+    #: Inputs sheet: the price-target block (4.9).
+    target_rows: dict[str, int] = field(default_factory=dict)
     #: First forecast column on every sheet that has periods.
     first_period_column: int = 3            # C
     #: Inputs sheet row carrying the period labels.
@@ -139,6 +142,19 @@ class Layout:
     comps_range_high: int = 13
     comps_spread: int = 14
 
+    # Target sheet rows (4.9)
+    target_shares: int = 3
+    target_base: int = 5
+    target_after_rerating: int = 6
+    target_after_revision: int = 7
+    target_price: int = 8
+    target_rerating: int = 10
+    target_revision: int = 11
+    target_roll_forward: int = 12
+    target_total: int = 13
+    target_upside: int = 14
+    target_identity: int = 15
+
     def column(self, index: int) -> str:
         return get_column_letter(self.first_period_column + index)
 
@@ -182,6 +198,20 @@ LAYOUT = Layout(
         "metric_value": 47,
         "growth": 48,
     },
+    target_rows={
+        "multiple": 52,
+        "forward_metric": 53,
+        "cash": 54,
+        "debt": 55,
+        "basic_shares": 56,
+        "options": 57,
+        "restricted_units": 58,
+        "offering": 59,
+        "current_price": 60,
+        "prior_multiple": 62,
+        "prior_metric": 63,
+        "revised_metric": 64,
+    },
 )
 
 _SCALAR_LABELS = {
@@ -217,6 +247,21 @@ _PEER_LABELS = {
     "numerator_value": "Peer numerator (EV or equity value)",
     "metric_value": "Peer forward metric",
     "growth": "Peer forward growth",
+}
+
+_TARGET_LABELS = {
+    "multiple": "Target multiple",
+    "forward_metric": "Forward metric at the valuation date",
+    "cash": "Cash (pro-forma)",
+    "debt": "Debt (pro-forma)",
+    "basic_shares": "Basic shares",
+    "options": "Options",
+    "restricted_units": "Restricted units",
+    "offering": "Offering shares (priced, unsettled)",
+    "current_price": "Current share price",
+    "prior_multiple": "Multiple at the valuation date",
+    "prior_metric": "Same-period metric at the valuation date",
+    "revised_metric": "Same-period metric after revision",
 }
 
 _DRIVER_LABELS = {
@@ -464,6 +509,106 @@ def _write_dcf(sheet, result: DcfResult, layout: Layout) -> None:
     sheet.column_dimensions["A"].width = 38
 
 
+def _write_target_inputs(sheet, target, layout: Layout) -> None:
+    """The price-target block, as typed values (framework 4.9)."""
+    _label(sheet, 51, "Price target (4.9) — fully diluted, source declared",
+           bold=True)
+    shares = target.shares
+    values = {
+        "multiple": target.multiple,
+        "forward_metric": target.forward_metric,
+        "cash": target.cash,
+        "debt": target.debt,
+        "basic_shares": shares.basic,
+        "options": shares.options,
+        "restricted_units": shares.restricted_units,
+        "offering": shares.offering,
+        "current_price": target.current_price,
+        "prior_multiple": target.prior_multiple,
+        "prior_metric": target.prior_metric,
+        "revised_metric": (target.revised_metric
+                           if target.revised_metric is not None
+                           else target.prior_metric),
+    }
+    for name, row in layout.target_rows.items():
+        _label(sheet, row, _TARGET_LABELS[name])
+        value = values[name]
+        if value is None:
+            continue
+        cell = sheet.cell(row, 2, to_spreadsheet(value))
+        cell.fill = _INPUT_FILL
+
+
+def _write_target(sheet, layout: Layout, target) -> None:
+    """The bridge, and the decomposition that makes the target auditable.
+
+    The last row is an identity check: the three components minus the actual
+    price change, which must be zero. Excel computes it independently, so a
+    decomposition that does not add up says so on the face of the workbook
+    rather than in a test somebody has to run.
+    """
+    _title(sheet, "Target — price and return decomposition (4.9)",
+           "Of the total upside, how much is re-rating, revision, roll-forward.")
+
+    def tgt(name: str) -> str:
+        return f"{SHEET_INPUTS}!$B${layout.target_rows[name]}"
+
+    def price_at(multiple: str, metric: str) -> str:
+        return formula("implied_price", multiple, metric, tgt("cash"),
+                       tgt("debt"), f"$B${layout.target_shares}")
+
+    rows = {
+        layout.target_shares: (
+            "Fully diluted shares",
+            formula("sum", tgt("basic_shares"), tgt("options"),
+                    tgt("restricted_units"), tgt("offering"))),
+        layout.target_base: (
+            "Price at the valuation date",
+            price_at(tgt("prior_multiple"), tgt("prior_metric"))),
+        layout.target_after_rerating: (
+            "...after re-rating",
+            price_at(tgt("multiple"), tgt("prior_metric"))),
+        layout.target_after_revision: (
+            "...after estimate revision",
+            price_at(tgt("multiple"), tgt("revised_metric"))),
+        layout.target_price: (
+            "...after rolling forward = target",
+            price_at(tgt("multiple"), tgt("forward_metric"))),
+        layout.target_rerating: (
+            "Re-rating",
+            formula("difference", f"B{layout.target_after_rerating}",
+                    f"B{layout.target_base}")),
+        layout.target_revision: (
+            "Estimate revision",
+            formula("difference", f"B{layout.target_after_revision}",
+                    f"B{layout.target_after_rerating}")),
+        layout.target_roll_forward: (
+            "Time roll-forward",
+            formula("difference", f"B{layout.target_price}",
+                    f"B{layout.target_after_revision}")),
+        layout.target_total: (
+            "Total price change",
+            formula("sum", f"B{layout.target_rerating}",
+                    f"B{layout.target_revision}",
+                    f"B{layout.target_roll_forward}")),
+        layout.target_upside: (
+            "Upside",
+            formula("upside", f"B{layout.target_price}", tgt("current_price"))),
+        layout.target_identity: (
+            "Identity check (must be zero)",
+            # Parenthesised: difference() emits 'a-b', so an unbracketed
+            # 'B8-B5' would render as B13-B8-B5 and quietly check nothing.
+            formula("difference", f"B{layout.target_total}",
+                    f"(B{layout.target_price}-B{layout.target_base})")),
+    }
+    for row, (text, cell_formula) in rows.items():
+        _label(sheet, row, text,
+               bold=row in (layout.target_price, layout.target_upside,
+                            layout.target_identity))
+        sheet.cell(row, 2, cell_formula)
+    sheet.column_dimensions["A"].width = 40
+
+
 def _write_comps_inputs(sheet, comps, layout: Layout) -> None:
     """The target-side quantities and the peer table, as typed values."""
     _label(sheet, 38, "Comparable companies (4.8) — same period, same source",
@@ -662,7 +807,8 @@ def _write_summary(sheet, result: DcfResult, layout: Layout) -> None:
 
 
 def write_workbook(result: DcfResult, path: str | Path,
-                   layout: Layout = LAYOUT, reverse=None, comps=None) -> Path:
+                   layout: Layout = LAYOUT, reverse=None, comps=None,
+                   target=None) -> Path:
     """Write the valuation as live formulas. Returns the path written.
 
     `reverse` is an optional `reverse_dcf.ReverseDcf`; when given, its solved
@@ -671,6 +817,9 @@ def write_workbook(result: DcfResult, path: str | Path,
 
     `comps` is an optional `CompsExport`; when given, the peer table is written
     to `Inputs` and the Comps tab computes every anchor and the range (4.8).
+
+    `target` is an optional `target.PriceTarget`; when given, the Target tab
+    carries the price bridge and the return decomposition (4.9).
     """
     if result.conventions != Conventions.SPEC:
         diverging = ", ".join(result.conventions.divergences(Conventions.SPEC))
@@ -695,6 +844,15 @@ def write_workbook(result: DcfResult, path: str | Path,
                 "Framework 4.8 requires the full set disclosed.")
         _write_comps_inputs(inputs_sheet, comps, layout)
         _write_comps(book.create_sheet(SHEET_COMPS), layout, comps)
+    if target is not None:
+        if target.prior_multiple is None or target.prior_metric is None:
+            raise ExportError(
+                "the price target has no valuation-date multiple and metric, "
+                "so the return decomposition 4.9 requires cannot be built. A "
+                "target without it is a number rather than an argument about "
+                "where the return comes from.")
+        _write_target_inputs(inputs_sheet, target, layout)
+        _write_target(book.create_sheet(SHEET_TARGET), layout, target)
     if reverse is not None:
         if reverse.terminal_growth is None:
             raise ExportError(

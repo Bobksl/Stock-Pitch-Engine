@@ -88,6 +88,15 @@ OPS: dict[str, Op] = {op.name: op for op in (
     Op("upside", 2,
        lambda implied, current: divide(implied, current) - Decimal(1),
        lambda implied, current: f"{implied}/{current}-1"),
+    # The framework 4.9 price bridge in one step. Kept as a single operation
+    # rather than composed from product/sum/ratio because the decomposition
+    # evaluates it four times at different arguments, and four hand-built
+    # nestings are four chances to transpose a reference.
+    Op("implied_price", 5,
+       lambda multiple, metric, cash, debt, shares: divide(
+           multiple * metric + cash - debt, shares),
+       lambda multiple, metric, cash, debt, shares:
+           f"({multiple}*{metric}+{cash}-{debt})/{shares}"),
 )}
 
 

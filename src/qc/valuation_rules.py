@@ -546,3 +546,84 @@ def comps_findings(comps, reported_anchors: tuple[str, ...] | None = None,
     if disclosure is not None:
         candidates.append(anchor_disclosure_finding(disclosure, reported_anchors))
     return [f for f in candidates if f is not None]
+
+
+# --------------------------------------------------------------------------
+# Price target (framework 4.9). Both rules are Class A and both are invisible
+# in the arithmetic: a target built on basic shares and one built on fully
+# diluted shares are equally correct divisions, and a multiple pulled from a
+# comp set and one reverse-engineered from a desired upside are the same
+# number typed into the same cell. Only a declaration separates them.
+# --------------------------------------------------------------------------
+
+def share_count_finding(target) -> Finding | None:
+    """Class A — the target does not divide by fully diluted shares (4.9).
+
+    The quiet way a retail target ends up 15% too high: ignore the options and
+    RSUs that will be exercised into the very upside being forecast.
+    """
+    shares = target.shares
+    if shares.fully_diluted > shares.basic:
+        return None
+    return Finding(
+        rule=rule("share_count_not_diluted"),
+        detail=(
+            f"the target divides by {shares.basic} shares with no options, "
+            f"restricted units or offering declared. 4.9 requires fully "
+            f"diluted with the dilution path shown; a target that ignores the "
+            f"instruments exercised into its own upside overstates it"),
+        measured=shares.fully_diluted, threshold=shares.basic)
+
+
+def target_provenance_finding(target) -> Finding | None:
+    """Class A — the target multiple has no declared source (4.9, 4.13).
+
+    A target reverse-engineered from a desired upside cannot be caught by
+    recomputation: every step of the arithmetic is correct. Only a declaration
+    of where the multiple came from separates it from an honest one.
+    """
+    from src.valuation.target import MULTIPLE_SOURCES, SOURCE_UNDECLARED
+
+    source = target.multiple_source
+    if source in MULTIPLE_SOURCES and source != SOURCE_UNDECLARED:
+        return None
+    known = tuple(s for s in MULTIPLE_SOURCES if s != SOURCE_UNDECLARED)
+    return Finding(
+        rule=rule("target_reverse_engineered"),
+        detail=(
+            f"the target multiple {target.multiple}x declares its source as "
+            f"{source!r}. It must come from one of {known}: the arithmetic of "
+            f"a reverse-engineered target is entirely correct, so a "
+            f"declaration is the only thing separating it from an honest one"),
+        measured=target.multiple)
+
+
+def target_findings(target) -> list[Finding]:
+    """Every framework 4.9 rule, evaluated against a price target."""
+    candidates = (share_count_finding(target),
+                  target_provenance_finding(target))
+    return [f for f in candidates if f is not None]
+
+
+def return_decomposition_measurements(decomposition) -> list[Measurement]:
+    """The decomposition as points of upside, reported alongside the target.
+
+    Required output under 4.9: it maps one-to-one onto the Section 3
+    archetypes and names the catalyst being waited on.
+    """
+    return [
+        Measurement(label="Upside from re-rating",
+                    value=decomposition.points(decomposition.re_rating).quantize(
+                        Decimal("0.1")),
+                    unit=" points", spec_ref="4.9"),
+        Measurement(label="Upside from estimate revision",
+                    value=decomposition.points(
+                        decomposition.estimate_revision).quantize(
+                        Decimal("0.1")),
+                    unit=" points", spec_ref="4.9"),
+        Measurement(label="Upside from time roll-forward",
+                    value=decomposition.points(
+                        decomposition.time_roll_forward).quantize(
+                        Decimal("0.1")),
+                    unit=" points", spec_ref="4.9"),
+    ]

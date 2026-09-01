@@ -66,6 +66,9 @@ SAMPLES = {
     "per_point": (Decimal("5.0"), Decimal("0.19")),
     "times_points": (Decimal("0.2631578947368421"), Decimal("0.25")),
     "upside": (Decimal("316.195424929466"), Decimal("100")),
+    # The 4.9 price bridge: multiple, metric, cash, debt, fully diluted shares.
+    "implied_price": (Decimal("14"), Decimal("1000"), Decimal("500"),
+                      Decimal("200"), Decimal("106")),
 }
 
 
