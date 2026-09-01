@@ -8,16 +8,17 @@
 
 ---
 
-## Status: PHASE 2 — exit criterion MET, §4 components outstanding (2026-09-01)
+## Status: PHASE 2 COMPLETE — valuation engine ✅ (2026-09-02)
 
-Branch `phase-2-valuation` off `main`, 11 commits, **not pushed**. 419 passed, 64 skipped.
+Branch `phase-2-valuation` off `main`, 16 commits, **not pushed**. 566 passed, 64 skipped.
+Exit criterion met AND every section 4 component built.
 
 **Exit criterion:** "reproduce the TSMC model's published TWD 1,732.66, then flag all eight
 Audit §2 findings." **Both halves done.**
 
 ```bash
 python -m pytest tests/test_tsmc_exit_criterion.py -q     # 29 passed
-python -m pytest -q                                       # 419 passed, 64 skipped
+python -m pytest -q                                       # 566 passed, 64 skipped
 ```
 
 ```
@@ -36,10 +37,19 @@ defect 4 [A] real_growth_on_nominal_flows          defect 8 [B] single_method_va
 ```
 
 **Built:** `src/valuation/` — `money` (the Decimal boundary) · `inputs` (declared inputs +
-`Conventions`) · `wacc` · `beta` (§4.4, both routes) · `dcf` · `excel/` (`reader`, `audit`,
-`formulas`, `workbook`, `readback`, `recalc`). `src/qc/` gained `rules` (the registry),
-`exceptions` (Class B records), `findings`, `valuation_rules`. Fixture
-`tests/fixtures/tsmc_model.xlsx`, sanitised — it carried the owner's email in `docProps`.
+`Conventions`) · `wacc` · `beta` (§4.4, both routes) · `dcf` · `reverse_dcf` (§4.7) · `comps`
+(§4.8) · `target` (§4.9) · `scenarios` (§4.10) · `excel/` (`reader`, `audit`, `formulas`,
+`workbook`, `readback`, `recalc`). `src/qc/` gained `rules` (the registry), `exceptions`
+(Class B records), `findings`, `valuation_rules`. Fixture `tests/fixtures/tsmc_model.xlsx`,
+sanitised — it carried the owner's email in `docProps`.
+
+**Every tab framework 4.12 names now exists** — Inputs · WACC · Model · Comps · DCF ·
+Scenarios · Sensitivity · Summary, plus Reverse DCF and Target — and each arrived with its C11
+coverage in the same commit that added it. `PENDING_SHEETS` is empty and a test asserts it.
+
+The Sensitivity tab is the strongest C11 evidence here: changing WACC changes every discount
+factor, so its 25 cells cannot be a lookup table even in principle. Each column rebuilds its
+own factor block and PV of the forecast; all 25 reconcile at 6.3e-16 worst case.
 
 ### The design decision that carried the phase
 **`ValuationInputs` is what the analyst asserted; `Conventions` is how those numbers are
@@ -103,16 +113,41 @@ explicit forecast.
 - The two `P2.5` commits (`261d92c` spec v1.2, `4b8bba8` Excel export) collide by label. The
   step order changed mid-phase and history was not rewritten to match.
 
-### Next: Phase 2 remainder, then Workstream B
-Four §4 components, one commit each, **each landing with its workbook tab and C11 coverage in
-the same commit** — `reverse_dcf` (§4.7) · `comps` (§4.8, the largest: pairing rule as a hard
-error, metric decision tree, regression normalisation, mandatory anchor disclosure) · `target`
-(§4.9, with the return decomposition) · `scenarios` (§4.10). Note the irony that defect 8 flags
-their absence in the fixture while the engine lacks them too.
+### Two more precision bugs, found late and worth not re-finding
+- **The engine advertised 50 digits and delivered 28.** `divide` and `power` opened a local
+  context at `PRECISION`; every plain `+`, `-` and `*` ran at Decimal's default. It surfaced as
+  a return-decomposition residual of 1e-26 where the arithmetic should give 1e-47 — a
+  discrepancy that reads as rounding and is actually a silent precision boundary. `money.py`
+  now sets the process context. Global state, accepted deliberately: the alternative puts the
+  invariant in dozens of places where one omission restores the bug silently.
+- **Excel operator precedence.** `difference(a, b)` emits `a-b`, so an unbracketed `B8-B5`
+  rendered as `=B13-B8-B5`. The Target tab's identity row exists to catch a decomposition that
+  does not add up, and it caught itself first, returning -204.9 instead of 0.
 
-Then Workstream B (repo repositioning): rename to `stock-pitch-engine` · README led by the QC
-gate and the TSMC demo · package layout as one mechanical commit · pre-commit hook blocking
-`data/bloomberg/` · CI · phase tags.
+### Next: Workstream B (repo repositioning)
+- **B1 rename** to `stock-pitch-engine` — needs a GitHub UI action first, then
+  `git remote set-url`. Cannot be done from here.
+- **B2 README** led by the QC gate and the TSMC demo, not the RAG.
+- **B3 package layout** as one mechanical commit, no behaviour change.
+- **B4 git hygiene** — pre-commit hook blocking licensed terminal data, `.gitignore`, CI,
+  phase tags, disclaimer.
+
+### Live case study: AVGO (data review, 2026-09-02)
+`../Case Study - AVGO Stock Pitch/` (OUTSIDE the repo, and it must stay there — the DES PDF
+carries "Not for redistribution"). Reviewed against what the engine consumes:
+- **Beta: complete and correct.** Raw 1.818, 5y weekly vs SPX, 260 points, SE 0.130. The raw
+  series is in `grid.xlsx`, and recomputing OLS from it reproduces Bloomberg to four decimals.
+  Use RAW — the code applies Blume, and Bloomberg's "Adjusted 1.545" is already Blume.
+- **DES**: price 370.34, market cap 1,761.9B, EV 1,807.2B, 4,757.6M shares, FY-end 10/2025,
+  segments Semiconductor Solutions 36.86B / Infrastructure Software 27.03B (57.7/42.3).
+- **Blocked**: the RV comps export carries finished multiples but no growth and no
+  profitability column, so both the regression (primary) and growth-adjusted (cross-check)
+  are uncomputable. It is also a 2Y-correlation screen rather than a comp set (GOOGL, AMZN,
+  META, PLTR, Samsung...), mixes four listing currencies, and calendarisation is almost
+  certainly off against an October fiscal year end. Re-pull promised for Thursday.
+- ECFC gives **real** GDP only (2.1%) — terminal growth must be derived nominal (~4.4%) and
+  declared as such, or it is defect 4 verbatim.
+- Unlike TSMC, WACC - g lands near 6.6pp, well clear of the 4pp floor.
 
 **Still open, not mine to decide:** the Finding *"Boilerplate outranks substance"* has no
 decision attached and threatens §5.7b's Item 1A diff, a load-bearing input to Section 5.
