@@ -444,3 +444,105 @@ def completeness_finding(model) -> Finding | None:
     return Finding(rule=rule("single_method_valuation"), detail=detail,
                    measured=Decimal(len(present)),
                    threshold=Decimal(MINIMUM_VALUATION_METHODS))
+
+
+# --------------------------------------------------------------------------
+# Comparable companies (framework 4.8)
+#
+# The pairing rule is enforced twice, deliberately. `comps.check_pairing`
+# RAISES at construction, because 4.8 calls it a hard error and a valuation
+# built on EV/earnings should not exist long enough to be reported on. The
+# finding below exists so the registry rule is reachable anyway: a rule that
+# can only be satisfied by an exception nobody can declare, and can never
+# fire, is a rule nobody maintains.
+# --------------------------------------------------------------------------
+
+def pairing_finding(numerator: str, metric: str) -> Finding | None:
+    """Class A — a numerator and metric from different points of the structure."""
+    from src.valuation.comps import PairingError, check_pairing
+
+    try:
+        check_pairing(numerator, metric)
+    except PairingError as exc:
+        return Finding(rule=rule("pairing_violation"), detail=str(exc))
+    return None
+
+
+def comp_consistency_finding(peers) -> Finding | None:
+    """Class A — peers on different periods or from different estimate sources.
+
+    Not a shape heuristic. A multiple built from one peer's calendar 2024 and
+    another's fiscal 2025, or from two providers who define EBITDA
+    differently, is comparing quantities that were never the same measurement.
+    """
+    periods = {p.period for p in peers}
+    sources = {p.estimate_source for p in peers}
+    problems = []
+    if len(periods) > 1:
+        problems.append(f"calendar periods {sorted(periods)}")
+    if len(sources) > 1:
+        problems.append(f"estimate sources {sorted(sources)}")
+    if not problems:
+        return None
+    return Finding(
+        rule=rule("comp_definitions_inconsistent"),
+        detail=(f"the comp set mixes {' and '.join(problems)}. A multiple "
+                f"across vintages or providers compares quantities that were "
+                f"never the same measurement"))
+
+
+def comp_set_size_finding(peers) -> Finding | None:
+    """Class B — a comp set too thin to carry a median or a regression."""
+    from src.valuation.comps import MINIMUM_COMP_SET
+
+    if len(peers) >= MINIMUM_COMP_SET:
+        return None
+    return Finding(
+        rule=rule("comp_set_below_minimum"),
+        detail=(f"{len(peers)} peers, below the minimum of {MINIMUM_COMP_SET}. "
+                f"A genuinely thin sub-industry is a legitimate reason to "
+                f"proceed, which is why this is exceptionable -- but n=2 is a "
+                f"teaching example, not a valuation (4.8)"),
+        measured=Decimal(len(peers)), threshold=Decimal(MINIMUM_COMP_SET))
+
+
+def anchor_disclosure_finding(disclosure, reported: tuple[str, ...] | None
+                              ) -> Finding | None:
+    """Class A — the implied target was not shown under every peer anchor.
+
+    The rule that changes conclusions. Reddit at IPO is 22-30% upside anchored
+    to PINS and +8% anchored to SNAP: same method, same inputs, same day, and
+    a headline roughly three times larger purely because of which peer was
+    picked. Reporting one anchor is not a summary of the range, it is a choice
+    presented as a result.
+    """
+    every = {anchor.peer for anchor in disclosure.anchors}
+    shown = set(reported or ())
+    missing = every - shown
+    if not missing:
+        return None
+    return Finding(
+        rule=rule("anchor_range_not_disclosed"),
+        detail=(f"{len(shown)} of {len(every)} anchors reported; "
+                f"{', '.join(sorted(missing))} omitted. The full range is "
+                f"{disclosure.low.implied_multiple:.2f}x to "
+                f"{disclosure.high.implied_multiple:.2f}x, a factor of "
+                f"{disclosure.spread:.2f} on the choice of peer alone"),
+        measured=Decimal(len(shown)), threshold=Decimal(len(every)))
+
+
+def comps_findings(comps, reported_anchors: tuple[str, ...] | None = None,
+                   shares=None) -> list[Finding]:
+    """Every framework 4.8 rule, evaluated against a comps export."""
+    candidates = [
+        pairing_finding(comps.numerator, comps.metric),
+        comp_consistency_finding(comps.peers),
+        comp_set_size_finding(comps.peers),
+    ]
+    try:
+        disclosure = comps.disclosure(shares=shares)
+    except Exception:                              # noqa: BLE001 - reported above
+        disclosure = None
+    if disclosure is not None:
+        candidates.append(anchor_disclosure_finding(disclosure, reported_anchors))
+    return [f for f in candidates if f is not None]

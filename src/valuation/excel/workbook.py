@@ -34,7 +34,12 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from src.valuation.dcf import DcfResult
-from src.valuation.excel.formulas import formula, sum_range
+from src.valuation.excel.formulas import (
+    formula,
+    max_range,
+    min_range,
+    sum_range,
+)
 from src.valuation.inputs import Conventions
 from src.valuation.money import to_spreadsheet
 
@@ -42,12 +47,13 @@ SHEET_INPUTS = "Inputs"
 SHEET_WACC = "WACC"
 SHEET_MODEL = "Model"
 SHEET_DCF = "DCF"
+SHEET_COMPS = "Comps"
 SHEET_REVERSE = "Reverse DCF"
 SHEET_SUMMARY = "Summary"
 
 #: Tabs framework 4.12 names whose components are still to come. Each must
 #: land with its C11 coverage in the same commit that adds it.
-PENDING_SHEETS = ("Comps", "Scenarios", "Sensitivity")
+PENDING_SHEETS = ("Scenarios", "Sensitivity")
 
 
 class ExportError(ValueError):
@@ -67,6 +73,10 @@ class Layout:
     #: it -- Excel recomputes the price from the implied assumption, and it
     #: must come back equal to the market price.
     reverse_rows: dict[str, int] = field(default_factory=dict)
+    #: Inputs sheet: the target-side quantities a comps valuation needs.
+    comps_rows: dict[str, int] = field(default_factory=dict)
+    #: Inputs sheet: per-peer rows, one column per peer.
+    peer_rows: dict[str, int] = field(default_factory=dict)
     #: First forecast column on every sheet that has periods.
     first_period_column: int = 3            # C
     #: Inputs sheet row carrying the period labels.
@@ -116,6 +126,19 @@ class Layout:
     reverse_share_price: int = 11
     reverse_residual: int = 12
 
+    # Comps sheet rows (4.8). One column per peer.
+    comps_peer: int = 3
+    comps_multiple: int = 4
+    comps_growth_adjusted: int = 5
+    comps_implied_multiple: int = 6
+    comps_implied_numerator: int = 7
+    comps_implied_equity: int = 8
+    comps_implied_price: int = 9
+    comps_upside: int = 10
+    comps_range_low: int = 12
+    comps_range_high: int = 13
+    comps_spread: int = 14
+
     def column(self, index: int) -> str:
         return get_column_letter(self.first_period_column + index)
 
@@ -147,6 +170,18 @@ LAYOUT = Layout(
         "market_price": 34,
         "implied_terminal_growth": 35,
     },
+    comps_rows={
+        "target_metric_value": 39,
+        "target_growth": 40,
+        "net_debt": 41,
+        "current_price": 42,
+    },
+    peer_rows={
+        "ticker": 45,
+        "numerator_value": 46,
+        "metric_value": 47,
+        "growth": 48,
+    },
 )
 
 _SCALAR_LABELS = {
@@ -168,6 +203,20 @@ _SCALAR_LABELS = {
 _REVERSE_LABELS = {
     "market_price": "Market price today",
     "implied_terminal_growth": "Implied terminal growth (solved in Python)",
+}
+
+_COMPS_LABELS = {
+    "target_metric_value": "Target forward metric (the denominator)",
+    "target_growth": "Target forward growth",
+    "net_debt": "Net debt (signed, debt less cash)",
+    "current_price": "Current share price",
+}
+
+_PEER_LABELS = {
+    "ticker": "Peer",
+    "numerator_value": "Peer numerator (EV or equity value)",
+    "metric_value": "Peer forward metric",
+    "growth": "Peer forward growth",
 }
 
 _DRIVER_LABELS = {
@@ -244,6 +293,15 @@ def _write_reverse_inputs(sheet, reverse, layout) -> None:
 
 def _rev(layout: Layout, name: str) -> str:
     return f"{SHEET_INPUTS}!B{layout.reverse_rows[name]}"
+
+
+def _cmp(layout: Layout, name: str, absolute: bool = True) -> str:
+    row = layout.comps_rows[name]
+    return f"{SHEET_INPUTS}!{'$B$' if absolute else 'B'}{row}"
+
+
+def _peer(layout: Layout, name: str, index: int) -> str:
+    return f"{SHEET_INPUTS}!{layout.column(index)}{layout.peer_rows[name]}"
 
 
 def _inp(layout: Layout, name: str, absolute: bool = False) -> str:
@@ -406,6 +464,120 @@ def _write_dcf(sheet, result: DcfResult, layout: Layout) -> None:
     sheet.column_dimensions["A"].width = 38
 
 
+def _write_comps_inputs(sheet, comps, layout: Layout) -> None:
+    """The target-side quantities and the peer table, as typed values."""
+    _label(sheet, 38, "Comparable companies (4.8) — same period, same source",
+           bold=True)
+    values = {"target_metric_value": comps.target_metric_value,
+              "target_growth": comps.target_growth,
+              "net_debt": comps.net_debt,
+              "current_price": comps.current_price}
+    for name, row in layout.comps_rows.items():
+        _label(sheet, row, _COMPS_LABELS[name])
+        value = values[name]
+        if value is None:
+            continue
+        cell = sheet.cell(row, 2, to_spreadsheet(value))
+        cell.fill = _INPUT_FILL
+
+    _label(sheet, layout.peer_rows["ticker"], _PEER_LABELS["ticker"], bold=True)
+    for name in ("numerator_value", "metric_value", "growth"):
+        _label(sheet, layout.peer_rows[name], _PEER_LABELS[name])
+
+    for index, peer in enumerate(comps.peers):
+        column = layout.first_period_column + index
+        ticker = sheet.cell(layout.peer_rows["ticker"], column, peer.ticker)
+        ticker.font = _HEADING
+        for name in ("numerator_value", "metric_value", "growth"):
+            cell = sheet.cell(layout.peer_rows[name], column,
+                              to_spreadsheet(getattr(peer, name)))
+            cell.fill = _INPUT_FILL
+
+
+def _write_comps(sheet, layout: Layout, comps) -> None:
+    """Every peer anchor, computed live. The range is the deliverable.
+
+    Framework 4.8 makes anchor disclosure mandatory because the choice of peer
+    moves the headline more than the method does -- Reddit at IPO is 22-30%
+    upside anchored to PINS and +8% anchored to SNAP, same inputs, same day.
+    So this tab computes ALL of them side by side and puts the range and the
+    spread on the bottom three rows, where a reader cannot take one column
+    home without seeing the others.
+
+    The regression (the primary normalisation method) is deliberately NOT
+    here. It would need LINEST, whose support in the reconciliation engine is
+    unverified, and an unreconciled formula on a calculation tab is precisely
+    what C11 exists to prevent. It stays in Python and is reported there.
+    """
+    from src.valuation.comps import NUMERATOR_ENTERPRISE, label as multiple_label
+
+    _title(sheet,
+           f"Comps — {multiple_label(comps.numerator, comps.metric)}, "
+           f"every anchor (4.8)",
+           "Growth-adjusted multiples are a CROSS-CHECK. The range is the point.")
+
+    for row, text in ((layout.comps_peer, "Peer"),
+                      (layout.comps_multiple, "Peer multiple"),
+                      (layout.comps_growth_adjusted, "Per point of growth"),
+                      (layout.comps_implied_multiple, "Implied multiple"),
+                      (layout.comps_implied_numerator, "Implied numerator"),
+                      (layout.comps_implied_equity, "Implied equity value"),
+                      (layout.comps_implied_price, "Implied price"),
+                      (layout.comps_upside, "Upside")):
+        _label(sheet, row, text,
+               bold=row in (layout.comps_peer, layout.comps_implied_multiple))
+
+    count = len(comps.peers)
+    for index in range(count):
+        col = layout.column(index)
+        set_ = lambda row, value: sheet.cell(  # noqa: E731
+            row, layout.first_period_column + index, value)
+
+        set_(layout.comps_peer, f"={_peer(layout, 'ticker', index)}")
+        set_(layout.comps_multiple,
+             formula("ratio", _peer(layout, "numerator_value", index),
+                     _peer(layout, "metric_value", index)))
+        set_(layout.comps_growth_adjusted,
+             formula("per_point", f"{col}{layout.comps_multiple}",
+                     _peer(layout, "growth", index)))
+        set_(layout.comps_implied_multiple,
+             formula("times_points", f"{col}{layout.comps_growth_adjusted}",
+                     _cmp(layout, "target_growth")))
+        set_(layout.comps_implied_numerator,
+             formula("product", f"{col}{layout.comps_implied_multiple}",
+                     _cmp(layout, "target_metric_value")))
+        set_(layout.comps_implied_equity,
+             formula("difference", f"{col}{layout.comps_implied_numerator}",
+                     _cmp(layout, "net_debt"))
+             if comps.numerator == NUMERATOR_ENTERPRISE
+             else f"={col}{layout.comps_implied_numerator}")
+        set_(layout.comps_implied_price,
+             formula("ratio", f"{col}{layout.comps_implied_equity}",
+                     _inp(layout, "shares_outstanding", absolute=True)))
+        set_(layout.comps_upside,
+             formula("upside", f"{col}{layout.comps_implied_price}",
+                     _cmp(layout, "current_price")))
+
+    first, last = layout.column(0), layout.column(count - 1)
+    row_of = layout.comps_implied_multiple
+    totals = {
+        layout.comps_range_low: (
+            "Range low (implied multiple)",
+            min_range(f"{first}{row_of}", f"{last}{row_of}")),
+        layout.comps_range_high: (
+            "Range high (implied multiple)",
+            max_range(f"{first}{row_of}", f"{last}{row_of}")),
+        layout.comps_spread: (
+            "Factor on the choice of peer",
+            formula("ratio", f"B{layout.comps_range_high}",
+                    f"B{layout.comps_range_low}")),
+    }
+    for row, (text, cell_formula) in totals.items():
+        _label(sheet, row, text, bold=row == layout.comps_spread)
+        sheet.cell(row, 2, cell_formula)
+    sheet.column_dimensions["A"].width = 38
+
+
 def _write_reverse(sheet, layout: Layout, periods: int) -> None:
     """Recompute the price at the implied assumption; it must equal the market.
 
@@ -490,12 +662,15 @@ def _write_summary(sheet, result: DcfResult, layout: Layout) -> None:
 
 
 def write_workbook(result: DcfResult, path: str | Path,
-                   layout: Layout = LAYOUT, reverse=None) -> Path:
+                   layout: Layout = LAYOUT, reverse=None, comps=None) -> Path:
     """Write the valuation as live formulas. Returns the path written.
 
     `reverse` is an optional `reverse_dcf.ReverseDcf`; when given, its solved
     terminal growth is written to `Inputs` and the Reverse DCF tab rebuilds the
     valuation around it so that Excel checks the solve (4.7).
+
+    `comps` is an optional `CompsExport`; when given, the peer table is written
+    to `Inputs` and the Comps tab computes every anchor and the range (4.8).
     """
     if result.conventions != Conventions.SPEC:
         diverging = ", ".join(result.conventions.divergences(Conventions.SPEC))
@@ -512,6 +687,14 @@ def write_workbook(result: DcfResult, path: str | Path,
     _write_wacc(book.create_sheet(SHEET_WACC), layout)
     _write_model(book.create_sheet(SHEET_MODEL), result, layout)
     _write_dcf(book.create_sheet(SHEET_DCF), result, layout)
+    if comps is not None:
+        if len(comps.peers) < 2:
+            raise ExportError(
+                "a comps tab needs at least two peers, because its deliverable "
+                "is the RANGE across anchors and one anchor has no range. "
+                "Framework 4.8 requires the full set disclosed.")
+        _write_comps_inputs(inputs_sheet, comps, layout)
+        _write_comps(book.create_sheet(SHEET_COMPS), layout, comps)
     if reverse is not None:
         if reverse.terminal_growth is None:
             raise ExportError(

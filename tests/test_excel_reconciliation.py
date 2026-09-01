@@ -59,6 +59,13 @@ SAMPLES = {
                       Decimal("0.034961"), Decimal("0.0278")),
     "discount_factor": (Decimal("0.0758268"), Decimal("5.1666666666666667")),
     "perpetuity": (Decimal("2260.5609"), Decimal("0.0445"), Decimal("0.0758268")),
+    # Comps operations (4.8). per_point and times_points are inverses, so the
+    # samples are the Reddit worked example in both directions.
+    "minimum": (Decimal("6.58"), Decimal("5.62"), Decimal("4.10")),
+    "maximum": (Decimal("6.58"), Decimal("5.62"), Decimal("4.10")),
+    "per_point": (Decimal("5.0"), Decimal("0.19")),
+    "times_points": (Decimal("0.2631578947368421"), Decimal("0.25")),
+    "upside": (Decimal("316.195424929466"), Decimal("100")),
 }
 
 

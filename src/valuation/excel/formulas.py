@@ -73,6 +73,21 @@ OPS: dict[str, Op] = {op.name: op for op in (
     Op("perpetuity", 3,
        _perpetuity,
        lambda flow, growth, rate: f"{flow}*(1+{growth})/({rate}-{growth})"),
+    Op("minimum", None,
+       lambda *xs: min(xs),
+       lambda *refs: "MIN(" + ",".join(refs) + ")"),
+    Op("maximum", None,
+       lambda *xs: max(xs),
+       lambda *refs: "MAX(" + ",".join(refs) + ")"),
+    Op("per_point", 2,
+       lambda value, rate: divide(value, rate * Decimal(100)),
+       lambda value, rate: f"{value}/({rate}*100)"),
+    Op("times_points", 2,
+       lambda value, rate: value * rate * Decimal(100),
+       lambda value, rate: f"{value}*{rate}*100"),
+    Op("upside", 2,
+       lambda implied, current: divide(implied, current) - Decimal(1),
+       lambda implied, current: f"{implied}/{current}-1"),
 )}
 
 
@@ -107,3 +122,13 @@ def sum_range(first: str, last: str) -> str:
     """`=SUM(first:last)`. A range has no per-argument Python counterpart;
     the paired operation is `sum` over the same cells."""
     return f"=SUM({first}:{last})"
+
+
+def min_range(first: str, last: str) -> str:
+    """`=MIN(first:last)`; the paired operation is `minimum`."""
+    return f"=MIN({first}:{last})"
+
+
+def max_range(first: str, last: str) -> str:
+    """`=MAX(first:last)`; the paired operation is `maximum`."""
+    return f"=MAX({first}:{last})"
