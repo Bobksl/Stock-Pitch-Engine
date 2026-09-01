@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.qc.rules import CLASS_A, DEFECTS
+from src.qc.rules import CLASS_A, CLASS_B, DEFECTS
 from src.qc.valuation_rules import convention_findings
 from src.valuation.excel.audit import audit_workbook
 from src.valuation.inputs import Conventions
@@ -98,16 +98,19 @@ class TestMeasurementsOnEveryRun:
         assert labels["Terminal value share (as built)"].value == Decimal("81.78")
         assert labels["Terminal value share (TV corrected)"].value == Decimal("86.75")
 
-    def test_the_arithmetic_error_was_masking_terminal_value_dominance(self, audit):
+    def test_the_arithmetic_error_understated_terminal_value_dominance(self, audit):
         """Defects 1 and 2, the pair that justifies this layer.
 
-        As built, terminal value looks like an unremarkable 81.8% of
-        enterprise value. Repair the arithmetic and it is 86.8%, above the
-        75% threshold. Two errors offsetting into a believable number.
+        Precisely: as built, terminal value is 81.78% of enterprise value --
+        ALREADY above the 75% threshold, so the Class B rule fires on the
+        published model too. The error did not conceal the breach, it
+        understated it, and what it really masked was the target price:
+        TWD 1,732.66 against a true TWD 2,359.34.
         """
         as_built = as_percent(audit.as_built.terminal_value_share)
         corrected = as_percent(audit.tv_corrected.terminal_value_share)
-        assert as_built < Decimal("85") < corrected
+        assert Decimal("75") < as_built < corrected
+        assert as_built == Decimal("81.78") and corrected == Decimal("86.75")
 
     def test_the_spread_is_reported_with_its_threshold(self, audit):
         spread = next(m for m in audit.rules.measurements
@@ -143,9 +146,14 @@ class TestACleanModelRaisesNothing:
 
 
 class TestClassAResistsAnExceptionStore:
-    def test_a_class_b_exception_does_not_touch_the_class_a_findings(self, audit,
-                                                                     tsmc_workbook):
-        """A live exception for an unrelated Class B rule changes nothing."""
+    def test_a_class_b_exception_leaves_every_class_a_finding_blocking(
+            self, tsmc_workbook):
+        """A live Class B exception satisfies its own rule and nothing else.
+
+        The five Class A findings are untouched by it, which is the property
+        that makes Class A meaningful: there is no store contents that could
+        clear them.
+        """
         store = """
         tv_share:
           condition: terminal_value_share
@@ -157,7 +165,8 @@ class TestClassAResistsAnExceptionStore:
         """
         with_store = audit_workbook(tsmc_workbook, published_price_cell="B27",
                                     exceptions=store, externals={}, as_of=TODAY)
+        blocking = {f.rule.id for f in with_store.rules.blocking}
+        assert {DEFECTS[n] for n in (1, 4, 5, 6, 7)} <= blocking
+        # Nothing Class A can ever reach the excepted list.
+        assert {f.rule.rule_class for f in with_store.rules.excepted} == {CLASS_B}
         assert with_store.passed is False
-        assert with_store.rules.excepted == []
-        assert all(f.rule.rule_class == CLASS_A
-                   for f in with_store.rules.blocking)

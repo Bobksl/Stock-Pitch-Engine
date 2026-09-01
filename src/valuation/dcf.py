@@ -201,3 +201,29 @@ def discounted_cash_flow(inputs: ValuationInputs,
         pv_terminal_value=pv_terminal_value, enterprise_value=enterprise_value,
         equity_value=equity_value,
         share_price=divide(equity_value, inputs.shares_outstanding))
+
+
+#: Framework 4.6 requires target-price sensitivity to +/-50bp on g reported
+#: alongside every DCF output.
+TERMINAL_GROWTH_STEP = Decimal("0.005")
+
+
+def terminal_growth_sensitivity(inputs: ValuationInputs,
+                                conventions: Conventions = Conventions.SPEC,
+                                step: Decimal = TERMINAL_GROWTH_STEP,
+                                ) -> tuple[DcfResult, DcfResult]:
+    """The same model at g -/+ `step`. Reported on every DCF (framework 4.6).
+
+    Not a scenario and not a stress test: g is a single unobservable assumption
+    that the terminal value divides by, so a band around it measures how much
+    of the answer is assumption rather than forecast. On a model whose spread
+    to WACC is already thin, that band is most of the answer.
+    """
+    from dataclasses import replace as _replace
+
+    return (discounted_cash_flow(
+                _replace(inputs, terminal_growth=inputs.terminal_growth - step),
+                conventions),
+            discounted_cash_flow(
+                _replace(inputs, terminal_growth=inputs.terminal_growth + step),
+                conventions))

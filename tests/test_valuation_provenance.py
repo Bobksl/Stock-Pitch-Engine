@@ -132,11 +132,15 @@ class TestBothTogether:
 
 
 class TestInTheAudit:
-    def test_the_audit_now_reports_five_findings(self, tsmc_workbook):
+    def test_the_audit_carries_all_five_class_a_defects(self, tsmc_workbook):
+        """Scoped to the Class A set, not to a total.
+
+        The audit's total grows with each remaining step; exactly-eight is
+        asserted once, in the acceptance test.
+        """
         from src.valuation.excel.audit import audit_workbook
         audit = audit_workbook(tsmc_workbook, published_price_cell="B27",
                                externals={})
-        assert len(audit.rules.findings) == 5
-        assert {f.rule.id for f in audit.rules.findings} == {
-            DEFECTS[n] for n in (1, 4, 5, 6, 7)}
-        assert all(f.rule.rule_class == CLASS_A for f in audit.rules.findings)
+        class_a = {f.rule.id for f in audit.rules.findings
+                   if f.rule.rule_class == CLASS_A}
+        assert class_a == {DEFECTS[n] for n in (1, 4, 5, 6, 7)}

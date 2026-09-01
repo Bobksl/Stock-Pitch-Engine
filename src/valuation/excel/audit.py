@@ -36,11 +36,17 @@ from src.qc.findings import FindingSet, apply_exceptions
 from src.qc.external import load_records
 from src.qc.valuation_rules import (
     convention_findings,
+    growth_sensitivity_measurements,
     provenance_findings,
     terminal_value_share_measurement,
+    threshold_findings,
     wacc_growth_spread_measurement,
 )
-from src.valuation.dcf import DcfResult, discounted_cash_flow
+from src.valuation.dcf import (
+    DcfResult,
+    discounted_cash_flow,
+    terminal_growth_sensitivity,
+)
 from src.valuation.inputs import Conventions
 from src.valuation.money import quantize_price
 from src.valuation.excel.reader import CellMap, TSMC_CELL_MAP, WorkbookModel, read_model
@@ -55,6 +61,8 @@ class WorkbookAudit:
     tv_corrected: DcfResult
     spec: DcfResult
     rules: FindingSet
+    #: The TV-corrected model at g -/+ 50bp (framework 4.6).
+    sensitivity: tuple[DcfResult, DcfResult] | None = None
 
     @property
     def passed(self) -> bool:
@@ -108,6 +116,7 @@ def audit_workbook(path, cell_map: CellMap = TSMC_CELL_MAP,
         replace(model.conventions,
                 terminal_value_base=Conventions.SPEC.terminal_value_base))
     spec = discounted_cash_flow(model.inputs, Conventions.SPEC)
+    sensitivity = terminal_growth_sensitivity(model.inputs, tv_corrected.conventions)
 
     if not isinstance(exceptions, dict):
         exceptions = load_exceptions(exceptions)
@@ -116,10 +125,12 @@ def audit_workbook(path, cell_map: CellMap = TSMC_CELL_MAP,
 
     findings = apply_exceptions(
         convention_findings(model, as_built, tv_corrected)
-        + provenance_findings(model.inputs, externals), exceptions)
+        + provenance_findings(model.inputs, externals)
+        + threshold_findings(tv_corrected, as_built, sensitivity), exceptions)
 
     return WorkbookAudit(
         model=model, as_built=as_built, tv_corrected=tv_corrected, spec=spec,
+        sensitivity=sensitivity,
         rules=FindingSet(
             findings=findings,
             measurements=[
@@ -128,5 +139,6 @@ def audit_workbook(path, cell_map: CellMap = TSMC_CELL_MAP,
                 terminal_value_share_measurement(
                     tv_corrected, "Terminal value share (TV corrected)"),
                 wacc_growth_spread_measurement(tv_corrected),
+                *growth_sensitivity_measurements(tv_corrected, sensitivity),
             ],
             as_of=as_of))

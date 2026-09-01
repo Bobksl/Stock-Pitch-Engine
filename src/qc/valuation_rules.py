@@ -30,7 +30,7 @@ from src.valuation.inputs import (
     STUB_FULL_YEAR_AT_STUB_FACTOR,
     TV_FROM_DISCOUNTED_UFCF,
 )
-from src.valuation.money import as_percent, quantize_price
+from src.valuation.money import as_percent, divide, quantize_price
 from src.valuation.wacc import cost_of_capital
 
 #: Framework 4.6. A single hard threshold; the v1.0 non-blocking 70% tier was
@@ -298,3 +298,92 @@ def provenance_findings(inputs, externals: dict | None = None) -> list[Finding]:
     candidates = (terminal_growth_provenance_finding(inputs, externals),
                   beta_provenance_finding(inputs, externals))
     return [f for f in candidates if f is not None]
+
+
+# --------------------------------------------------------------------------
+# Threshold rules — defects 2 and 3 (framework 4.6). Both Class B.
+#
+# These are the first rules in the registry that a declared exception can
+# satisfy, and the reason they are Class B rather than Class A is worth being
+# precise about. A terminal value at 86.8% of enterprise value is not WRONG.
+# It is unusual, and on an infrastructure concession or a pre-revenue biotech
+# it can be entirely honest. What it cannot be is unremarked.
+#
+# They are measured on the TV-corrected run, not the as-built one, because the
+# corrected run is the honest statement of what this model implies.
+#
+# Note what the fixture does and does not show. As built, terminal value is
+# 81.8% of enterprise value -- already above the 75% threshold, so this rule
+# fires on the published model too. The arithmetic error did not hide the
+# breach; it understated it, to 81.8% from a true 86.8%. That is a weaker
+# claim than "the error concealed the condition" and it is the accurate one.
+# The masking that matters is of the target price: TWD 1,732.66 against
+# TWD 2,359.34, a 36% understatement landing in a believable range.
+# --------------------------------------------------------------------------
+
+def terminal_value_share_finding(corrected: DcfResult,
+                                 as_built: DcfResult | None = None,
+                                 sensitivity: tuple | None = None
+                                 ) -> Finding | None:
+    """Defect 2 — terminal value above 75% of enterprise value (4.6)."""
+    share = corrected.terminal_value_share
+    if share <= TERMINAL_VALUE_SHARE_LIMIT:
+        return None
+
+    detail = (f"terminal value is {as_percent(share)}% of enterprise value, "
+              f"above the {as_percent(TERMINAL_VALUE_SHARE_LIMIT)}% threshold")
+    if as_built is not None and as_built.terminal_value_share < share:
+        detail += (f". As built it reads "
+                   f"{as_percent(as_built.terminal_value_share)}%: the "
+                   f"arithmetic error understated the dominance")
+    if sensitivity is not None:
+        down, up = sensitivity
+        currency = corrected.inputs.currency
+        swing = divide(up.share_price - down.share_price, corrected.share_price)
+        detail += (f". A +/-50bp band on g moves the target from {currency} "
+                   f"{quantize_price(down.share_price):,} to {currency} "
+                   f"{quantize_price(up.share_price):,}, {as_percent(swing)}% "
+                   f"of the value being defended")
+    return Finding(rule=rule("terminal_value_share"), detail=detail,
+                   measured=share, threshold=TERMINAL_VALUE_SHARE_LIMIT)
+
+
+def wacc_growth_spread_finding(result: DcfResult) -> Finding | None:
+    """Defect 3 — WACC minus g below 4 percentage points (4.6)."""
+    spread = result.spread_to_terminal_growth
+    if spread >= WACC_GROWTH_SPREAD_FLOOR:
+        return None
+
+    return Finding(
+        rule=rule("wacc_growth_spread"),
+        detail=(
+            f"WACC less terminal growth is {as_percent(spread)}pp, below the "
+            f"{as_percent(WACC_GROWTH_SPREAD_FLOOR)}pp floor "
+            f"(WACC {as_percent(result.wacc, '0.0001')}%, g "
+            f"{as_percent(result.terminal_growth)}%). Below this the model is a "
+            f"terminal-value assumption wearing a DCF as a disguise"),
+        measured=spread, threshold=WACC_GROWTH_SPREAD_FLOOR)
+
+
+def threshold_findings(corrected: DcfResult,
+                       as_built: DcfResult | None = None,
+                       sensitivity: tuple | None = None) -> list[Finding]:
+    """Defects 2 and 3, evaluated on the corrected model."""
+    candidates = (terminal_value_share_finding(corrected, as_built, sensitivity),
+                  wacc_growth_spread_finding(corrected))
+    return [f for f in candidates if f is not None]
+
+
+def growth_sensitivity_measurements(result: DcfResult,
+                                    sensitivity: tuple) -> list[Measurement]:
+    """Target price at g -/+ 50bp, reported alongside every DCF (4.6)."""
+    down, up = sensitivity
+    currency = result.inputs.currency
+    return [
+        Measurement(label=f"Target at g -50bp "
+                          f"({as_percent(down.inputs.terminal_growth)}%), {currency}",
+                    value=quantize_price(down.share_price), spec_ref="4.6"),
+        Measurement(label=f"Target at g +50bp "
+                          f"({as_percent(up.inputs.terminal_growth)}%), {currency}",
+                    value=quantize_price(up.share_price), spec_ref="4.6"),
+    ]
