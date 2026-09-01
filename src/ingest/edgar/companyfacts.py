@@ -9,12 +9,12 @@ agreeing with it to the cent is real evidence the instance parser is correct.
 Endpoint: data.sec.gov/api/xbrl/companyfacts/CIK##########.json
 Shape:    facts.{taxonomy}.{tag}.units.{unit}[] -> {start?, end, val, accn, fy, fp, form, filed}
 
-CLI:  python -m src.edgar.companyfacts 789019 --tag Revenues
+CLI:  python -m src.ingest.edgar.companyfacts 789019 --tag Revenues
 """
 from datetime import date
 from typing import Iterator
 
-from src.edgar.client import fetch_json
+from src.ingest.edgar.client import fetch_json
 
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 

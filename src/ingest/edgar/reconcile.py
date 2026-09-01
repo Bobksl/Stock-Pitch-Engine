@@ -14,15 +14,15 @@ counted separately:
   - dimensional facts (segment / geography members) — the reason we parse at all
   - company-extension taxonomies (e.g. 'msft:') — not in the standard taxonomies
 
-CLI:  python -m src.edgar.reconcile 0000950170-24-087843
-      python -m src.edgar.reconcile --all
+CLI:  python -m src.ingest.edgar.reconcile 0000950170-24-087843
+      python -m src.ingest.edgar.reconcile --all
 """
 from dataclasses import dataclass
 from decimal import Decimal
 
 from src.db import get_conn
-from src.edgar.companyfacts import index_by_key
-from src.edgar.ixbrl import parse_cached_filing
+from src.ingest.edgar.companyfacts import index_by_key
+from src.ingest.edgar.ixbrl import parse_cached_filing
 
 STANDARD_TAXONOMIES = frozenset({"us-gaap", "dei", "srt", "ifrs-full", "invest"})
 

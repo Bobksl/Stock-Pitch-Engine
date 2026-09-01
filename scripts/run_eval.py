@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.eval.harness import load_questions, run_eval    # noqa: E402
+from src.retrieval.eval.harness import load_questions, run_eval    # noqa: E402
 
 
 def main() -> int:

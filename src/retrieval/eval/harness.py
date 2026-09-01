@@ -35,7 +35,7 @@ import yaml
 
 from src.config import PROJECT_ROOT
 from src.db import get_conn
-from src.rag_chat import RETRIEVAL_SQL
+from src.retrieval.chat import RETRIEVAL_SQL
 
 QUESTIONS_PATH = PROJECT_ROOT / "eval" / "questions.yaml"
 DEFAULT_KS = (1, 3, 5, 10)

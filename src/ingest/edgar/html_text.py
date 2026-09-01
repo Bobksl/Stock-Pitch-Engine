@@ -12,7 +12,7 @@ Two things are dropped rather than rendered:
                            noise in front of Item 1.
   script / style         — never prose.
 
-CLI:  python -m src.edgar.html_text 0000950170-24-087843 --head 40
+CLI:  python -m src.ingest.edgar.html_text 0000950170-24-087843 --head 40
 """
 import re
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.rag_chat import retrieve
+from src.retrieval.chat import retrieve
 
 QUESTIONS: list[tuple[str, str | None]] = [
     # (question, ticker filter or None)

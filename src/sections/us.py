@@ -22,7 +22,7 @@ Output carries BOTH keys: `section_key` ('item_1a') for Item-precise retrieval,
 and the legacy `section_type` ('Risk Factors') so rag_chat, alerts and app keep
 working unchanged across the HK and US corpora.
 
-CLI:  python -m src.edgar.sections_us 0000950170-24-087843
+CLI:  python -m src.sections.us 0000950170-24-087843
 """
 import re
 from dataclasses import dataclass
@@ -186,7 +186,7 @@ def _assert_usable(sections: list[Section]) -> None:
 
 
 def segment_filing(accession: str) -> tuple[str, list[Section]]:
-    from src.edgar.html_text import cached_filing_text
+    from src.ingest.edgar.html_text import cached_filing_text
 
     text = cached_filing_text(accession)
     return text, segment_text(text)

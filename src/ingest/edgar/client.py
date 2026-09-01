@@ -13,7 +13,7 @@ and what makes an ingestion run reproducible months later (Audit G6).
 Errors are raised, never swallowed: a half-fetched filing must not look like a
 filing with missing facts.
 
-CLI:  python -m src.edgar.client https://data.sec.gov/submissions/CIK0000789019.json
+CLI:  python -m src.ingest.edgar.client https://data.sec.gov/submissions/CIK0000789019.json
 """
 import gzip
 import hashlib

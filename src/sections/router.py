@@ -1,7 +1,7 @@
 """Module 15 — segmentation router: one command, two segmenters.
 
-    documents.format = 'pdf'   -> src.sections        (HK annual reports, page anchors)
-    documents.format = 'html'  -> src.edgar.sections_us (10-K Items, char offsets)
+    documents.format = 'pdf'   -> src.sections.hk        (HK annual reports, page anchors)
+    documents.format = 'html'  -> src.sections.us (10-K Items, char offsets)
 
 The two never merge and never fall back to one another. A 10-K that fails to
 anchor on its Items raises: silently handing it to the heuristic segmenter would
@@ -12,8 +12,8 @@ Both writers populate `section_type` from the same vocabulary, so rag_chat,
 alerts and app keep working across both corpora; the US path additionally writes
 `section_key` ('item_1a') for Item-precise retrieval.
 
-CLI:  python -m src.segment --doc-id 43 --apply
-      python -m src.segment --all-html --apply
+CLI:  python -m src.sections.router --doc-id 43 --apply
+      python -m src.sections.router --all-html --apply
 """
 from src.db import get_conn
 
@@ -26,7 +26,7 @@ VALUES (%s, %s, %s, 'item_anchor_us', %s, %s, %s)
 
 def segment_html(doc_id: int, *, apply_to_chunks: bool = False) -> list:
     """Item-anchor a US filing and replace its sections rows."""
-    from src.edgar.sections_us import segment_filing
+    from src.sections.us import segment_filing
 
     with get_conn() as conn:
         row = conn.execute(
@@ -64,7 +64,7 @@ def segment(doc_id: int, *, apply_to_chunks: bool = False):
     if row[0] == "html":
         return segment_html(doc_id, apply_to_chunks=apply_to_chunks)
 
-    from src.sections import segment as segment_pdf
+    from src.sections.hk import segment as segment_pdf
     return segment_pdf(doc_id, apply_to_chunks=apply_to_chunks)
 
 

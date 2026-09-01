@@ -9,8 +9,8 @@ from decimal import Decimal
 
 import pytest
 
-from src.edgar import ixbrl
-from src.edgar.ixbrl import IxbrlError, XbrlFact, parse_instance, parse_number
+from src.ingest.edgar import ixbrl
+from src.ingest.edgar.ixbrl import IxbrlError, XbrlFact, parse_instance, parse_number
 
 HEAD = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"

@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from src.edgar import sections_us as S
-from src.edgar.sections_us import SegmentationError, segment_text
+from src.sections import us as S
+from src.sections.us import SegmentationError, segment_text
 
 BODY = ("Padding sentence for this section. " * 12)      # ~400 chars, over the minimum
 
@@ -154,7 +154,7 @@ def test_a_document_with_no_items_raises():
 
 def test_segmentation_never_falls_back_to_the_heuristic_segmenter():
     """A wrong-but-plausible segmentation is worse than a hard failure."""
-    import src.segment as router
+    import src.sections.router as router
     assert "sections_us" in router.segment_html.__doc__ or True
     with pytest.raises(SegmentationError):
         segment_text("Item 1. Business\nshort")

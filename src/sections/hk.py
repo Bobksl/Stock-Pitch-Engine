@@ -10,7 +10,7 @@ Rules that matter for real HK/UK annual reports:
 
 Sections span [start_page, next_start - 1]. Pages before the first heading are 'Other'.
 
-CLI:  python -m src.sections --doc-id 1   (add --apply to also tag chunks)
+CLI:  python -m src.sections.hk --doc-id 1   (add --apply to also tag chunks)
 """
 import re
 

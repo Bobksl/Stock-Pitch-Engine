@@ -8,7 +8,7 @@ import urllib.error
 
 import pytest
 
-from src.edgar import client
+from src.ingest.edgar import client
 
 
 @pytest.fixture

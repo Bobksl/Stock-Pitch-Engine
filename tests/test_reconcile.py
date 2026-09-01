@@ -7,8 +7,8 @@ from decimal import Decimal
 
 import pytest
 
-from src.edgar.ixbrl import XbrlFact
-from src.edgar.reconcile import ReconcileError, Report, agrees, compare, reconcile_filing
+from src.ingest.edgar.ixbrl import XbrlFact
+from src.ingest.edgar.reconcile import ReconcileError, Report, agrees, compare, reconcile_filing
 
 ACC = "0000950170-24-087843"
 START, END = date(2023, 7, 1), date(2024, 6, 30)
@@ -114,7 +114,7 @@ def test_report_string_surfaces_every_bucket():
 
 def test_reconcile_filing_raises_on_mismatch(monkeypatch):
     """A parser that disagrees with SEC must stop the build, not warn."""
-    import src.edgar.reconcile as R
+    import src.ingest.edgar.reconcile as R
 
     monkeypatch.setattr(R, "get_conn", lambda: _conn_returning((789019,)))
     monkeypatch.setattr(R, "parse_cached_filing", lambda acc: ([fact("245122000000")], {}))

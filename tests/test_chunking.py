@@ -1,9 +1,9 @@
 """P0.8 — HTML chunking with character anchors, and format-aware citations."""
 import pytest
 
-from src.chunk_embed import _blocks, build_chunks_from_text
+from src.ingest.chunk_embed import _blocks, build_chunks_from_text
 from src.config import CHUNK_TOKENS
-from src.rag_chat import _locator
+from src.retrieval.chat import _locator
 
 PARA = "This is a sentence in a filing paragraph. " * 8       # ~330 chars
 

@@ -9,8 +9,8 @@ newer doc's section (doc_id / section_id / page_ref all set, so every alert link
 to its source).
 
 CLI:
-  python -m src.alerts summarize --doc-id 1
-  python -m src.alerts diff --ticker 0700.HK --from-year 2024 --to-year 2025
+  python -m src.retrieval.alerts summarize --doc-id 1
+  python -m src.retrieval.alerts diff --ticker 0700.HK --from-year 2024 --to-year 2025
 """
 from src import llm
 from src.config import LLM_MODEL, LLM_SECTION_TEXT_CAP

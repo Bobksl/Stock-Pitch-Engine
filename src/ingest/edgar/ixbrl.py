@@ -21,7 +21,7 @@ Parsing rules that are easy to get wrong, and are each pinned by a test:
 Namespace prefixes vary between filers (xbrli: vs default), so traversal matches
 on local names only.
 
-CLI:  python -m src.edgar.ixbrl 0000950170-24-087843 --tag Revenues
+CLI:  python -m src.ingest.edgar.ixbrl 0000950170-24-087843 --tag Revenues
 """
 from dataclasses import dataclass
 from datetime import date
@@ -295,7 +295,7 @@ def consolidated(facts: list[XbrlFact]) -> list[XbrlFact]:
 
 
 def parse_cached_filing(accession: str) -> tuple[list[XbrlFact], dict[str, str]]:
-    """Parse a filing already fetched by src.edgar.fetch."""
+    """Parse a filing already fetched by src.ingest.edgar.fetch."""
     from src.db import get_conn
 
     with get_conn() as conn:

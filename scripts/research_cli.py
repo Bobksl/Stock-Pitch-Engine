@@ -37,10 +37,10 @@ def resolve_cik(ticker: str) -> int:
 
 
 def cmd_ingest(args) -> int:
-    from src.edgar.fetch import fetch_company
-    from src.edgar.reconcile import reconcile_filing
+    from src.ingest.edgar.fetch import fetch_company
+    from src.ingest.edgar.reconcile import reconcile_filing
     from src.facts.store import store_companyfacts, store_filing_facts
-    from src.segment import segment_html
+    from src.sections.router import segment_html
 
     print(f"[1/5] fetching {args.ticker} {args.form} filings from EDGAR")
     fetched = fetch_company(args.ticker, forms=(args.form,), years=args.years)

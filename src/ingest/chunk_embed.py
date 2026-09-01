@@ -11,8 +11,8 @@ Two chunkers, chosen by documents.format:
           and packing whole paragraphs keeps table rows and prose intact instead
           of slicing mid-sentence at an arbitrary token count.
 
-CLI:  python -m src.chunk_embed --doc-id 1
-      python -m src.chunk_embed --all-html
+CLI:  python -m src.ingest.chunk_embed --doc-id 1
+      python -m src.ingest.chunk_embed --all-html
 """
 import tiktoken
 
@@ -137,7 +137,7 @@ def chunk_and_embed(doc_id: int) -> int:
     fmt, accession = row
 
     if fmt == "html":
-        from src.edgar.html_text import cached_filing_text
+        from src.ingest.edgar.html_text import cached_filing_text
 
         chunks = build_chunks_from_text(cached_filing_text(accession))
         return _embed_and_store(doc_id, chunks,
@@ -148,7 +148,7 @@ def chunk_and_embed(doc_id: int) -> int:
             "SELECT page_num, raw_text FROM pages WHERE doc_id = %s ORDER BY page_num",
             (doc_id,)).fetchall()
     if not pages:
-        raise SystemExit(f"doc_id {doc_id} has no pages — run src.ingest first")
+        raise SystemExit(f"doc_id {doc_id} has no pages — run src.ingest.pdf first")
     return _embed_and_store(doc_id, build_chunks(pages),
                             ("page", "end_page", "content", "token_count"))
 

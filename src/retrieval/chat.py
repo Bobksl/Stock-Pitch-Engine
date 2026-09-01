@@ -4,7 +4,7 @@ embed question (same local embedding model) -> metadata-filtered HNSW cosine top
 -> grounding prompt with [ticker year type | section | p.N or Item 7A] tags per chunk
 -> configured LLM -> answer + structured citations.
 
-CLI:  python -m src.rag_chat "What were the main revenue drivers?" [--ticker 0700.HK] [--year 2025] [-k 8]
+CLI:  python -m src.retrieval.chat "What were the main revenue drivers?" [--ticker 0700.HK] [--year 2025] [-k 8]
 """
 from src import llm
 from src.db import get_conn

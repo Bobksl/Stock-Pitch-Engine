@@ -6,7 +6,7 @@ Writes companies / documents / pages rows.
 
 Filename convention carries metadata: 0700_HK_2025_annual.pdf
 
-CLI:  python -m src.ingest sample_pdfs/0700_HK_2025_annual.pdf [--no-ocr]
+CLI:  python -m src.ingest.pdf sample_pdfs/0700_HK_2025_annual.pdf [--no-ocr]
 """
 import re
 import sys

@@ -7,8 +7,8 @@ from datetime import date
 
 import pytest
 
-from src.edgar import discover
-from src.edgar.client import EdgarError
+from src.ingest.edgar import discover
+from src.ingest.edgar.client import EdgarError
 
 TICKERS = {
     "0": {"cik_str": 789019, "ticker": "MSFT", "title": "MICROSOFT CORP"},

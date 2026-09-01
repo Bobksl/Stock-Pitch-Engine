@@ -11,11 +11,11 @@ plus FilingSummary.xml, then writes three rows:
 Idempotent: re-running upserts by ticker / accession and re-uses the HTTP cache,
 so a repeated run costs no requests and produces no duplicate rows.
 
-CLI:  python -m src.edgar.fetch MSFT --years 5
+CLI:  python -m src.ingest.edgar.fetch MSFT --years 5
 """
 from src.db import get_conn
-from src.edgar import client
-from src.edgar.discover import Filing, company_meta, list_filings, ticker_to_cik
+from src.ingest.edgar import client
+from src.ingest.edgar.discover import Filing, company_meta, list_filings, ticker_to_cik
 
 UPSERT_COMPANY = """
 INSERT INTO companies (ticker, company_name, sector, cik, country, sic, fiscal_year_end)

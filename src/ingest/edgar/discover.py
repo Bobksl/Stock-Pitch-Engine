@@ -1,6 +1,6 @@
 """Module 5 — EDGAR discovery: ticker → CIK → filing list.
 
-Two SEC endpoints, both cached by src.edgar.client:
+Two SEC endpoints, both cached by src.ingest.edgar.client:
 - files/company_tickers.json   ticker → CIK (one file for every US filer)
 - data.sec.gov/submissions/    per-filer metadata + filing index
 
@@ -14,12 +14,12 @@ DocumentFiscalPeriodFocus are tagged in the filing itself (dei), and the filer's
 own answer beats anything inferred from a report date. They are filled in when
 facts are parsed.
 
-CLI:  python -m src.edgar.discover MSFT --form 10-K --years 5
+CLI:  python -m src.ingest.edgar.discover MSFT --form 10-K --years 5
 """
 from dataclasses import dataclass
 from datetime import date
 
-from src.edgar.client import EdgarError, fetch_json
+from src.ingest.edgar.client import EdgarError, fetch_json
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
