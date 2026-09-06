@@ -21,9 +21,19 @@ jobs:
         # sentence-transformers pulls torch, which is large and only needed by
         # the embedding path. The suite skips those tests without a database
         # anyway, so CI installs the rest and lets them skip.
+        #
+        # `tiktoken` and `openai` are small and are needed at *import* time by
+        # src/ingest/chunk_embed.py and src/llm.py. Their tests are ordinary
+        # logic tests that should run here, not skip: leaving them out did not
+        # skip anything, it failed collection. Neither needs a key to import --
+        # the OpenAI client is constructed lazily in llm.get_client().
+        #
+        # `psycopg` is deliberately absent: there is no Postgres on this runner,
+        # so every DB-backed test skips through its own guard. src/db.py imports
+        # the driver inside get_conn() so that stays a skip, not a collect error.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest openpyxl formulas lxml pyyaml python-dotenv
+          pip install pytest openpyxl formulas lxml pyyaml python-dotenv tiktoken openai
 
       - name: Run the suite
         # C11 is NOT skippable: the `formulas` engine is installed above, and
