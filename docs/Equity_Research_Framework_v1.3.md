@@ -1,11 +1,18 @@
-# AI Equity Research Framework — v1.2
+# AI Equity Research Framework — v1.3
 
-**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-01
+**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-07
 **Scope:** US-listed equities (SEC EDGAR), position horizon (months–quarters), IT sector first
 **Output:** Polished shareable pitch + auditable Excel valuation model
 **Mode:** Interactive co-pilot, section by section
 
 ## Changelog
+
+**v1.3 — 2026-09-07**
+
+- **§6.5** — the Class A definition generalised from "the figure is wrong or unverifiable" to cover any assertion that is wrong, unverifiable, or prohibited. Phase 3 introduces the first QC rules about generated *prose* rather than figures (banned language, a pricing-power claim carrying no number). They are unambiguously correctness, and the deciding test is that no reason in §6.5's closed exception vocabulary — `long_duration_asset`, `pre_revenue`, `regulated_concession` — could ever excuse one. A rule no vocabulary reason can excuse must not be Class B: that would give it an exception path which cannot be used honestly, and a path that looks open but never is, is worse than no path.
+- **§6.4** — `filing_text_disclosure` added to the external closed vocabulary, for the §7 KPIs a filer discloses in narrative rather than in XBRL (book-to-bill, ARR, NRR, ASP, design wins). It satisfies the existing test for the class — a quantity XBRL cannot answer — so the three-class model is unchanged and there is still no fourth class. The record must cite a chunk and character offset, and the verifier asserts the numeral appears **literally** in that chunk's text; without the literal-match requirement this entry would make retrieval the source of a figure and breach P2.
+- **§1.6** — the "so what" fail condition restated as a reported measurement plus human review rather than a blocking gate rule. It is not deterministically checkable; deciding it with an LLM inside the gate means the same draft passes and fails across runs, which destroys the single passing state §6.5 guarantees, and makes the LLM the last check on the output, which the Audit's boundary map forbids.
+- **§2.7** — three of its five conditions restated as construction-time invariants rather than gate rules. A section that cannot be built without a structural conclusion, a profit-capture conclusion, and a tier tag plus justification per comp-set member can never present those defects to the gate. Same mechanism §6.5 already uses to make Class A unexceptionable: refuse at construction, not at check time.
 
 **v1.2 — 2026-09-01**
 
@@ -111,11 +118,15 @@ Constraints established in Phase 0:
 ~250 words, conclusion first. Required exhibits: revenue **and profit** mix by segment; margin / incremental-margin history; KPI snapshot. Every figure cited.
 
 ### 1.6 QC — Fail Conditions
-- Banned marketing phrases present
-- Pricing-power or operating-leverage claim without a supporting number
-- Segment revenue shown without segment profit
-- Any sentence failing the "so what" test
+
+All Class A (§6.5): none of them is excusable by any reason in the closed exception vocabulary, which is the test that decides the class.
+
+- Banned marketing phrases present (§6.1)
+- Pricing-power or operating-leverage claim without a supporting number — §1.4f: no number, no claim
+- Segment revenue shown without segment profit (§1.3)
 - **Recency:** any figure not from the latest filed period, or any prior-year figure without its current-year comparative
+
+**Reported, not blocking.** The "so what" test (P4) is a **measurement**: the count of sentences stating a fact without a consequence is printed on every run and reviewed by a human. It is not a gate rule. Deciding it requires judgment, and an LLM judgment inside the gate means the same draft passes on one run and fails on the next — which destroys the single passing state §6.5 guarantees, and makes the LLM the last check on its own output, which the Audit's boundary map forbids. A measurement makes no claim about acceptability; it states a value.
 
 ---
 
@@ -174,11 +185,13 @@ Plus **peer drawdown analysis**: define stress windows; compute peak-to-trough d
 ~400–500 words, conclusion first. Exhibits: industry panel; relative-growth / share chart; peer drawdown table. Explicit stance on structure and direction.
 
 ### 2.7 QC — Fail Conditions
-- TAM or CAGR without source and derivation method
-- Competitor list with no structural conclusion
-- Comp set inherited from GICS without type-field justification
-- No conclusion on profit capture
-- Missing tier tags or justifications
+
+**Gate rules — both Class A (§6.5):**
+
+- **TAM or CAGR without source and derivation method.** Distinct from a figure that fails to resolve: a TAM lifted from an investor deck *does* resolve, to a declared external record. The defect is the absent bottom-up derivation (§2.5a), which is why it needs its own rule.
+- **Comp set inherited from GICS without type-field justification.** This is C1. Class A rather than Class B for the reason given in §6.5: no reason in the closed exception vocabulary could ever excuse it, so a Class B path here would be one that can never legitimately be used.
+
+**Construction-time invariants — not gate rules.** The remaining three conditions are enforced by refusing to build the object rather than by checking it afterwards: a Section 2 does not construct without a structural conclusion and a conclusion on profit capture, and a comp-set member does not construct without its tier tag and written justification. Those defects therefore cannot be presented to the gate at all. This is the mechanism §6.5 already uses to make Class A unexceptionable — refuse at construction, not at check time.
 
 ### 2.8 Industry Primer Caching
 Industry work is cached as a **versioned primer**, reusable across names in the same sector, refreshed quarterly. Pitches reference a primer version. Saves duplicated effort and enforces internal consistency across your coverage.
@@ -499,8 +512,11 @@ Every figure in every output resolves to a declared provenance record. There are
 - credit spreads and CDS levels
 - third-party market sizing
 - peer trading multiples
+- filing-text disclosures — a §7 KPI the filer states in narrative and never tags
 
 **Anything expressible in XBRL is inadmissible as external.** Without that constraint this class becomes a general bypass for the facts table.
+
+**Filing-text disclosures carry one extra requirement.** Many §7 KPIs — book-to-bill, ARR, NRR, ASP, unit volume, design wins — are disclosed in Item 1 or Item 7 prose and never tagged. XBRL cannot answer them, so they qualify for this class on the same test as everything else in it. The record must cite a **chunk id and character offset**, and the verifier asserts the numeral appears **literally** in that chunk's text: exact string containment, not similarity and not search. Without that requirement this entry would make retrieval the source of a figure, which P2 forbids. With it, the filing is the source, retrieval merely located it, and the citation is checkable in the same way a fact anchor is.
 
 **Scale is read, never inferred.** A figure's scale comes from its table column header. A financial figure in an unlabelled column is `scale undeclared` and fails (Class A).
 
@@ -508,8 +524,10 @@ Every figure in every output resolves to a declared provenance record. There are
 
 **Every QC rule is Class A or Class B.**
 
-- **Class A — correctness.** The figure is wrong or unverifiable. **Never exceptionable.**
+- **Class A — correctness.** The output asserts something wrong, unverifiable, or prohibited. **Never exceptionable.**
 - **Class B — model shape.** The model is unusual, not wrong. **Exceptionable.**
+
+Class A was originally written as "the figure is wrong or unverifiable." That is figure-centric, and it left the first rules about generated *prose* (§1.6, §2.7) with no home: a banned marketing adjective is not a figure, and it is plainly not a question of model shape either. **The test that decides the class is the exception vocabulary below.** If no reason in it — `long_duration_asset`, `pre_revenue`, `regulated_concession` — could ever legitimately excuse a breach, the rule is Class A. Making such a rule Class B would hand it an exception path that can never be used honestly, and a path that looks open but never is, is worse than no path at all.
 
 **There remains exactly one passing state.** An exception is not a severity level and not a dismissed warning — it is a positive, structured, attributed assertion that a named condition was accepted for a declared reason.
 

@@ -2,9 +2,10 @@
 
 > Cross-session memory. Update before ending any AI session: status, decisions, next steps.
 
-> **The spec is at v1.2** (`docs/Equity_Research_Framework_v1.2.md`). Do not build against v1.0
-> or v1.1 — the 70% terminal-value tier was deleted at v1.1 and Class A/B rule classes replaced
-> the "explicit discussion" wording. The changelog at the top of the spec lists every change.
+> **The spec is at v1.3** (`docs/Equity_Research_Framework_v1.3.md`). Do not build against v1.0,
+> v1.1 or v1.2 — the 70% terminal-value tier was deleted at v1.1, Class A/B rule classes replaced
+> the "explicit discussion" wording at v1.1, and v1.3 generalised the Class A definition to cover
+> prose. The changelog at the top of the spec lists every change.
 
 ---
 
