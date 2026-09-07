@@ -45,6 +45,30 @@ stub convention in 4.5 and adds the matching Class A rule.
 `beta_not_derived` was folded into "WACC copied from a terminal". 4.4 states
 the beta policy in its own right, and the two are separately detectable and
 separately reported, so v1.2 lists them separately.
+
+The Phase 3 prose rules
+-----------------------
+Phase 3 adds the first rules about generated prose rather than about a figure,
+and every one of them is Class A. The test is the exception vocabulary, and
+spec v1.3 states it in 6.5: if no reason in `EXCEPTION_REASONS` could ever
+legitimately excuse a breach, the rule cannot be Class B, because Class B for
+such a rule is an exception path that can never be used honestly. No
+long-duration asset, pre-revenue company or regulated concession has a claim on
+a marketing adjective, on a pricing-power assertion carrying no number, or on a
+comp set inherited from GICS without justification.
+
+`comp_set_not_type_justified` is the one where that test overturns the obvious
+reading. It looks like model shape -- the comp set is unusual, not wrong -- and
+Class B is the tempting answer. But it is C1, the join key the whole pitch
+hangs off, and none of the three reasons touches it. Class B would have handed
+it a door that opens onto nothing.
+
+Two conditions in 1.6 and three in 2.7 are deliberately NOT here. The "so what"
+test is a Measurement: it needs judgment, and a judgment inside the gate means
+the same draft passes on one run and fails on the next. The three 2.7
+completeness conditions are construction-time invariants -- a Section 2 that
+will not build without a structural conclusion cannot present that defect to
+the gate -- which is strictly stronger than a rule that checks afterwards.
 """
 from dataclasses import dataclass
 
@@ -130,6 +154,18 @@ RULES: dict[str, Rule] = _registry(
          "Excel recalculation disagrees with Python beyond tolerance (C11)"),
     Rule("figure_not_latest_period", CLASS_A, "6.3",
          "A figure is not from the latest filed period (C12)"),
+
+    # -- Phase 3, sections 1 and 2. Prose rules; see the docstring above.
+    Rule("banned_language", CLASS_A, "6.1",
+         "Marketing language lifted from the filing appears in the draft"),
+    Rule("unsupported_qualitative_claim", CLASS_A, "1.6",
+         "A pricing-power or operating-leverage claim carries no supporting number"),
+    Rule("segment_profit_missing", CLASS_A, "1.3",
+         "Segment revenue is shown without segment operating profit"),
+    Rule("sizing_without_derivation", CLASS_A, "2.7",
+         "A TAM or CAGR carries no source and no derivation method"),
+    Rule("comp_set_not_type_justified", CLASS_A, "2.7",
+         "Comp set inherited from GICS without type-field justification (C1)"),
 
     # ---------------------------------------------------------------- Class B
     Rule("terminal_value_share", CLASS_B, "4.6",
