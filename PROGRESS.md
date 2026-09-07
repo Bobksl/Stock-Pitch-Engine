@@ -9,6 +9,128 @@
 
 ---
 
+## Status: PHASE 3 IN PROGRESS - sections 1 and 2 (2026-09-07)
+
+Branch `phase-3-sections` off `main`, 3 commits, **not pushed**. 654 passed, 0 skipped.
+
+**Phase numbering settled.** The audit's build sequence and the README's phase table
+disagreed. The audit wins - it is the more specific document and its sequencing rationale is
+explicit - so phase 3 is *sections 1 and 2*, phase 4 is *sections 3 and 5*, phase 5 is
+assembly. The README table was the bug and is fixed.
+
+**Exit criterion proposed and accepted.** One command, and unlike phase 2 there is no
+published answer to reproduce, so it tests verifiability and detection rather than agreement
+with a target:
+
+```bash
+python scripts/draft_pitch.py AVGO --sections 1,2 --qc     # exit 0
+```
+
+1. every figure resolves to a fact / model / ext anchor (C10), from the latest filed period
+   (C12), and all five required 1.5 / 2.6 exhibits are present - the non-vacuity clause,
+   without which a draft carrying no figures passes;
+2. the 1.4h type field is computed from the segment panel and hand-checks against AVGO's
+   FY2025 10-K segment footnote;
+3. the industry panel spans one calendar period across at least 5 peers with at least one
+   off-cycle peer excluded **and named** - AVGO's October fiscal year end against
+   December-FYE peers makes that path execute on the live case rather than a contrived one;
+4. every new 1.6 / 2.7 rule has a degraded draft in `tests/fixtures/` tripping exactly that
+   rule and nothing else. This is the phase-3 analogue of phase 1's corruption test, and the
+   falsifiable core of the criterion.
+
+### Spec amendments made this phase (v1.2 -> v1.3)
+- **6.5** - Class A generalised from "the figure is wrong or unverifiable" to any assertion
+  wrong, unverifiable, or prohibited. Phase 3 is the first phase generating prose, and a
+  banned marketing adjective is neither a figure nor a question of model shape. **The test
+  that decides the class is now stated once:** if no reason in the closed exception
+  vocabulary could ever excuse a breach, the rule is Class A. Class B for such a rule is an
+  exception path that can never be used honestly, which is worse than no path.
+- **6.4** - `filing_text_disclosure` added to the external vocabulary. Roughly half the
+  section 7 taxonomy (book-to-bill, ARR, NRR, ASP, unit volume, design wins) is disclosed in
+  prose and never tagged, so XBRL cannot answer it and it qualifies on the class's own test.
+  Three classes still, no fourth. The record cites a chunk id and character offset and the
+  verifier asserts the numeral appears **literally** in that chunk - without exact
+  containment this entry would make retrieval the source of a figure and breach P2.
+- **1.6** - the "so what" test becomes a Measurement. An LLM judgment inside the gate means
+  the same draft passes on one run and fails on the next, destroying the single passing
+  state, and makes the LLM the last check on its own output.
+- **2.7** - three of its five conditions become construction-time invariants. A Section 2
+  that will not build without a structural conclusion cannot present that defect to the gate.
+
+### Decisions taken this phase (approved before coding)
+- **`src/pitch/`, not `src/sections/`.** The latter already means Item-anchored segmentation
+  of a *filing*. These are sections of the *pitch*. Approved deviation from the handover.
+- **Five new rules, all Class A** - `banned_language`, `unsupported_qualitative_claim`,
+  `segment_profit_missing`, `sizing_without_derivation`, `comp_set_not_type_justified`. The
+  last one overturns the handover's "arguably Class B": it is C1, and no exception reason
+  touches it.
+- **Price history: a local `prices` table with a gitignored loader** (fork 1, option A). The
+  schema is public and reviewable, the data never enters git, and drawdown statistics become
+  *derived* figures rather than declared scalars. Needs one extension to `external.py`: a
+  record kind pointing at a table and key rather than carrying a value, since a five-year
+  series is not a scalar and `ExternalRecord` is. Not built yet.
+- **Period alignment: exclude and name** (fork 2). `calendar_period()` returns None outside
+  tolerance and the peer leaves that column by name; never mapped to the nearest year. The
+  SEC `frames` tolerance constant is to be read from SEC documentation and cited in code -
+  **not** guessed, and **not** `ANNUAL_MIN_DAYS/MAX_DAYS`, which is a duration filter
+  answering a different question.
+- **The type field gets three verdicts, not two** (see below). Contested threshold 10pp.
+
+### The finding that changed the exit criterion
+AVGO was not ingested; it is now (5 filings, **0 reconciliation mismatches**, and its segment
+revenue reproduces the Bloomberg DES export to the dollar - 36,858 / 27,029 against
+36.86B / 27.03B).
+
+And its FY2025 type field does **not** disagree. Revenue splits 57.69 / 42.31 to
+Semiconductor Solutions and profit splits **50.56 / 49.44** the same way, so the two
+dominances agree and a binary argmax test passes it silently. That agreement is worth 467m
+out of 42bn, against segment margins of 57.60% and 76.82%. Answering "semiconductor company"
+there hands section 2 the semiconductor comp set while half the profit is enterprise
+software earning a software margin - the exact failure 1.4h exists to prevent, arriving
+through a near-tie instead of a flip.
+
+So `contested` is a verdict of its own: top two profit shares within 10pp. AMD FY2025 lands
+at 9.71pp and would also have passed a binary test. The 10pp is a judgement call and is
+stated once in `src/pitch/types.py`.
+
+### Built (P3.0-P3.1)
+`src/pitch/types.py` - `TypeField`, `SegmentShare`, `ExcludedMember`. Every dominance is a
+property over `shares`, and `shares` is built only by `from_panel` out of `Fact` objects, so
+there is no path that *asserts* a type field. Refuses a revenue-bearing segment with no
+segment profit (1.3), and refuses a panel whose segments do not sum to a profit.
+
+1.4b (driver mix) and 1.4d (contract structure) are deliberately absent: no consumer until
+section 1 assembly, and building them now would be speculative.
+
+### Hard-won this phase
+- **Filers tag non-segments on the segment axis.** AVGO tags unallocated expenses there with
+  zero revenue and -6,069m of profit in FY2022 and FY2021. Counted as a segment it corrupts
+  the profit denominator and can win the argmax outright. Excluded structurally - a member
+  with no revenue is not a business segment - and **named** in `excluded`, never dropped
+  silently.
+- **Segment profit does not reconcile to consolidated operating income**, and must not be
+  expected to. AVGO FY2025: segments sum to 41,997m against a consolidated 25,484m, because
+  ASC 280 segment profit excludes unallocated amortisation and SBC. `SegmentPanel.reconciles()`
+  returns True for revenue and False for operating income on a perfectly correct filing, so a
+  gate applying the revenue reconciliation to profit would fire on every name.
+- **Quantise last.** AMD FY2023: 0.5452282 - 0.2628631 = 0.2823651 -> 0.2824, where rounding
+  the shares first and subtracting gives 0.2823. One ulp, irrelevant there, decisive at a
+  threshold. A test asserts only that.
+- **`pretty_member` renders the qname, so the qname has to be right.** AMD tags
+  `amd:DatacenterMember`, not `DataCenterMember`; the latter renders "Data Center" and the
+  test fixture silently stops matching the live data it claims to mirror.
+- The em-dash joins U+2212 on the GBK console list. `render()` uses ASCII hyphens.
+
+### Next
+P3.2 KPI taxonomy (`config/kpi_taxonomy.yaml`, derived KPIs as a `CellRegistry`), then P3.3
+section 1 assembly. **P3.4 (R4 per-entity retrieval quota) must land before section 2**:
+`RETRIEVAL_SQL` is a plain `ORDER BY ... LIMIT k` with no window function, and the measured
+top-doc share of top-10 is 49.1%, so one document takes half the slots in a cross-company
+panel. Owner dependencies still open: the Bloomberg price export (fork 1) and the AVGO RV
+comps re-pull, which still has no growth and no profitability column.
+
+---
+
 ## Status: PHASE 2 COMPLETE — valuation engine ✅ (2026-09-02)
 
 Branch `phase-2-valuation` off `main`, 16 commits, **not pushed**. 566 passed, 64 skipped.
