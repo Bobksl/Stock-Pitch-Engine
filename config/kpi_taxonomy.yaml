@@ -1,0 +1,375 @@
+# ============================================================================
+# Framework section 7 — the sector KPI taxonomy, Information Technology.
+#
+# Data rather than code, for the reason concept_map.yaml is data: how a number
+# is produced must be visible in a diff. Section 7 asks each entry to carry a
+# name, a definition, a source (an XBRL tag or filing text), and whether it is
+# disclosed or derived. Those are the four fields below.
+#
+#   disclosure: disclosed   the filer states it
+#     source: {concept: X}    tagged in XBRL; X is resolved by concept_map.yaml,
+#                             which owns tag resolution -- never a raw tag here
+#     source: filing_text     stated in prose and never tagged. Enters through
+#                             the `filing_text_disclosure` external record of
+#                             spec 6.4 (v1.3), which cites a chunk id and a
+#                             character offset and is checked by literal string
+#                             containment against that chunk
+#
+#   disclosure: derived     computed from disclosed figures
+#     derivation.op           an op from the CLOSED vocabulary in src/qc/cells.py
+#                             (sum, difference, product, ratio, growth). There is
+#                             no expression language and no eval
+#     derivation.inputs       {concept: X} · {concept: X, periods_ago: 1} ·
+#                             {kpi: Y} · {literal: N, note: "..."}
+#
+# A derived KPI is therefore a MODEL CELL: recomputed at verification time from
+# cited facts, never stored. Framework 6.4 covers it already and this file adds
+# no new provenance machinery.
+#
+# The proportion of this file that is `filing_text` is the evidence behind the
+# v1.3 amendment to 6.4. Roughly half of section 7 -- ARR, NRR, book-to-bill,
+# ASP, unit volume, design wins -- is disclosed in prose and never tagged. A
+# taxonomy that admitted only XBRL would drop those, which guts the 1.5 KPI
+# snapshot for both software and semis.
+# ============================================================================
+version: 1
+
+sub_groups:
+
+  # --------------------------------------------------------------- 7.1
+  software_saas:
+    label: Software / SaaS
+    spec_ref: "7.1"
+    kpis:
+
+      arr:
+        definition: Annualised recurring revenue at the period end.
+        disclosure: disclosed
+        source: filing_text
+
+      nrr:
+        definition: >-
+          Net revenue retention: revenue from the prior-year cohort this year,
+          including expansion and net of churn and contraction.
+        disclosure: disclosed
+        source: filing_text
+
+      grr:
+        definition: >-
+          Gross revenue retention: the same cohort excluding expansion. The gap
+          to NRR is what expansion is carrying.
+        disclosure: disclosed
+        source: filing_text
+
+      net_new_arr:
+        definition: ARR added in the period, gross of churn where disclosed.
+        disclosure: disclosed
+        source: filing_text
+
+      cac_payback:
+        definition: >-
+          Months of gross profit from a new cohort required to recover the
+          sales and marketing spend that won it.
+        disclosure: disclosed
+        source: filing_text
+
+      magic_number:
+        definition: >-
+          Net new ARR divided by prior-period sales and marketing spend. A
+          sales-efficiency read, not a growth read.
+        disclosure: disclosed
+        source: filing_text
+
+      rpo:
+        definition: >-
+          Remaining performance obligation: contracted revenue not yet
+          recognised. An instant, measured at the period end.
+        disclosure: disclosed
+        source: {concept: remaining_performance_obligation}
+
+      rpo_growth:
+        definition: Year-over-year growth in remaining performance obligation.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: growth
+          inputs:
+            - {concept: remaining_performance_obligation}
+            - {concept: remaining_performance_obligation, periods_ago: 1}
+
+      revenue_growth:
+        definition: Year-over-year growth in total revenue.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: growth
+          inputs:
+            - {concept: revenue}
+            - {concept: revenue, periods_ago: 1}
+
+      free_cash_flow:
+        definition: Operating cash flow less capital expenditure.
+        disclosure: derived
+        unit: USD
+        derivation:
+          op: difference
+          inputs:
+            - {concept: operating_cash_flow}
+            - {concept: capex}
+
+      fcf_margin:
+        definition: Free cash flow as a proportion of revenue.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {kpi: free_cash_flow}
+            - {concept: revenue}
+
+      rule_of_40:
+        definition: >-
+          Revenue growth plus free-cash-flow margin. A trade-off measure: the
+          same score reached by growth and by margin describes two different
+          businesses, so it is read alongside its components, never instead.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: sum
+          inputs:
+            - {kpi: revenue_growth}
+            - {kpi: fcf_margin}
+
+      sbc_intensity:
+        definition: >-
+          Share-based compensation as a proportion of revenue. 4.9 treats SBC
+          as a real cost; this is the size of it.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: share_based_compensation}
+            - {concept: revenue}
+
+      gross_margin:
+        definition: Gross profit as a proportion of revenue.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: gross_profit}
+            - {concept: revenue}
+
+  # --------------------------------------------------------------- 7.2
+  semiconductors:
+    label: Semiconductors
+    spec_ref: "7.2"
+    kpis:
+
+      utilisation:
+        definition: Fab or capacity utilisation for the period.
+        disclosure: disclosed
+        source: filing_text
+
+      asp:
+        definition: >-
+          Average selling price. Section 7.2 requires ASP and unit volume
+          SEPARATELY: revenue moving is uninformative until it is split into
+          the two, which move independently through a cycle.
+        disclosure: disclosed
+        source: filing_text
+
+      unit_volume:
+        definition: Units shipped in the period. See the note on ASP.
+        disclosure: disclosed
+        source: filing_text
+
+      book_to_bill:
+        definition: >-
+          Bookings divided by billings. Above one, the order book is building
+          faster than it is being consumed.
+        disclosure: disclosed
+        source: filing_text
+
+      channel_inventory:
+        definition: >-
+          Weeks of inventory held by distributors. Distinct from the balance
+          sheet: channel stock is demand already sold in and not sold through.
+        disclosure: disclosed
+        source: filing_text
+
+      design_wins:
+        definition: Sockets awarded but not yet in production revenue.
+        disclosure: disclosed
+        source: filing_text
+
+      inventory:
+        definition: Inventory net of reserves at the period end.
+        disclosure: disclosed
+        source: {concept: inventory}
+
+      inventory_turns:
+        definition: Inventory divided by cost of revenue for the period.
+        disclosure: derived
+        unit: pure
+        quantize: "0.000001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: inventory}
+            - {concept: cost_of_revenue}
+
+      inventory_days:
+        definition: >-
+          Inventory expressed in days of cost of revenue. The cycle indicator
+          that leads reported revenue.
+        disclosure: derived
+        unit: days
+        quantize: "0.01"
+        derivation:
+          op: product
+          inputs:
+            - {kpi: inventory_turns}
+            - {literal: 365,
+               note: "days in a year; the periods here are annual by construction"}
+
+      capex_intensity:
+        definition: Capital expenditure as a proportion of revenue.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: capex}
+            - {concept: revenue}
+
+      rd_intensity:
+        definition: Research and development spend as a proportion of revenue.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: research_and_development}
+            - {concept: revenue}
+
+      gross_margin:
+        definition: Gross profit as a proportion of revenue.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: gross_profit}
+            - {concept: revenue}
+
+  # --------------------------------------------------------------- 7.3
+  hardware:
+    label: Hardware / Equipment
+    spec_ref: "7.3"
+    kpis:
+
+      unit_volume:
+        definition: Units shipped in the period.
+        disclosure: disclosed
+        source: filing_text
+
+      asp:
+        definition: Average selling price per unit.
+        disclosure: disclosed
+        source: filing_text
+
+      attach_rate:
+        definition: Attached software, service or accessory revenue per unit.
+        disclosure: disclosed
+        source: filing_text
+
+      backlog_coverage:
+        definition: Backlog as a multiple of the period's revenue.
+        disclosure: disclosed
+        source: filing_text
+
+      warranty_rate:
+        definition: Warranty and return provisions against units shipped.
+        disclosure: disclosed
+        source: filing_text
+
+      bom_cost_trend:
+        definition: Direction of bill-of-materials cost per unit.
+        disclosure: disclosed
+        source: filing_text
+
+      gross_margin:
+        definition: >-
+          Gross profit as a proportion of revenue. The 7.3 gross margin bridge
+          decomposes the change in this figure; the level is computed here.
+        disclosure: derived
+        unit: pure
+        quantize: "0.0001"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: gross_profit}
+            - {concept: revenue}
+
+  # --------------------------------------------------------------- 7.4
+  it_services:
+    label: IT Services
+    spec_ref: "7.4"
+    kpis:
+
+      headcount:
+        definition: Billable and total headcount at the period end.
+        disclosure: disclosed
+        source: filing_text
+
+      utilisation:
+        definition: Billable hours as a proportion of available hours.
+        disclosure: disclosed
+        source: filing_text
+
+      bill_rate:
+        definition: Realised revenue per billable hour.
+        disclosure: disclosed
+        source: filing_text
+
+      book_to_bill:
+        definition: Bookings divided by revenue recognised in the period.
+        disclosure: disclosed
+        source: filing_text
+
+      contract_duration:
+        definition: Weighted-average remaining contract term.
+        disclosure: disclosed
+        source: filing_text
+
+      offshore_mix:
+        definition: Delivery headcount in offshore locations, as a proportion.
+        disclosure: disclosed
+        source: filing_text
+
+      revenue_per_employee:
+        definition: >-
+          Revenue divided by headcount. The one derived KPI in this taxonomy
+          standing on a prose disclosure rather than on XBRL, which is why it
+          cannot be computed until a filing_text_disclosure record supplies the
+          headcount and cites where in the filing it was read.
+        disclosure: derived
+        unit: USD
+        quantize: "0.01"
+        derivation:
+          op: ratio
+          inputs:
+            - {concept: revenue}
+            - {kpi: headcount}
