@@ -39,6 +39,52 @@ ORDER BY c.embedding <=> %(qvec)s
 LIMIT %(k)s
 """
 
+#: Audit R4 — the per-entity quota. A window function ranks each filer's chunks
+#: among themselves, and only the best `per_entity` of them compete for the
+#: top-k.
+#:
+#: Why an entity and not a document: the panel that breaks is a cross-COMPANY
+#: one. A per-document quota still lets four vintages of one filer take eight
+#: slots, which is the same failure wearing a different partition. Bounding the
+#: entity bounds the document too, since a document belongs to one entity.
+#:
+#: The cost is real and worth stating: the window is computed over every chunk
+#: matching the metadata filter, so this cannot use the HNSW index's top-k
+#: shortcut the way the unquotaed query does. At this corpus size that is
+#: nothing; at a corpus where it matters, the fix is to pre-filter candidates
+#: rather than to widen the quota. The unquotaed path is therefore left exactly
+#: as it was rather than being replaced by a quota of infinity -- the phase-1
+#: retrieval baseline was measured on it, and a rewritten query would make that
+#: number incomparable.
+RETRIEVAL_SQL_PER_ENTITY = """
+WITH ranked AS (
+  SELECT c.chunk_id, c.page, COALESCE(c.end_page, c.page) AS end_page,
+         COALESCE(s.section_type, 'n/a') AS section,
+         d.ticker, d.fiscal_year, d.doc_type, c.content, d.format,
+         s.section_key, c.start_char,
+         c.embedding <=> %(qvec)s AS distance,
+         ROW_NUMBER() OVER (PARTITION BY d.ticker
+                            ORDER BY c.embedding <=> %(qvec)s) AS entity_rank
+  FROM chunks c
+  JOIN documents d ON d.doc_id = c.doc_id
+  LEFT JOIN sections s ON s.section_id = c.section_id
+  WHERE (%(ticker)s::text IS NULL OR d.ticker = %(ticker)s)
+    AND (%(year)s::int    IS NULL OR d.fiscal_year = %(year)s)
+)
+SELECT chunk_id, page, end_page, section, ticker, fiscal_year, doc_type,
+       content, format, section_key, start_char, distance
+FROM ranked
+WHERE entity_rank <= %(per_entity)s
+ORDER BY distance
+LIMIT %(k)s
+"""
+
+
+def retrieval_sql(per_entity: int | None = None) -> str:
+    """The retrieval query, with or without the R4 quota."""
+    return RETRIEVAL_SQL if per_entity is None else RETRIEVAL_SQL_PER_ENTITY
+
+
 _model = None
 
 
@@ -53,10 +99,20 @@ def _embed_question(question: str):
     return _model.encode([question], normalize_embeddings=True)[0]
 
 
-def retrieve(question: str, ticker: str | None = None, year: int | None = None, k: int = 8) -> list[dict]:
+def retrieve(question: str, ticker: str | None = None, year: int | None = None,
+             k: int = 8, per_entity: int | None = None) -> list[dict]:
+    """Top-k chunks, optionally with at most `per_entity` from any one filer.
+
+    The quota is off by default. A single-company question wants the best k
+    passages wherever they fall, and capping them would answer a question
+    nobody asked; the panel in section 2 is what needs the cap, and it asks.
+    """
     qvec = _embed_question(question)
+    params = {"qvec": qvec, "ticker": ticker, "year": year, "k": k}
+    if per_entity is not None:
+        params["per_entity"] = per_entity
     with get_conn() as conn:
-        rows = conn.execute(RETRIEVAL_SQL, {"qvec": qvec, "ticker": ticker, "year": year, "k": k}).fetchall()
+        rows = conn.execute(retrieval_sql(per_entity), params).fetchall()
     cols = ("chunk_id", "page", "end_page", "section", "ticker", "fiscal_year", "doc_type",
             "content", "format", "section_key", "start_char", "distance")
     return [dict(zip(cols, r)) for r in rows]

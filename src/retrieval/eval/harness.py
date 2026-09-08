@@ -35,7 +35,7 @@ import yaml
 
 from src.config import PROJECT_ROOT
 from src.db import get_conn
-from src.retrieval.chat import RETRIEVAL_SQL
+from src.retrieval.chat import retrieval_sql
 
 QUESTIONS_PATH = PROJECT_ROOT / "eval" / "questions.yaml"
 DEFAULT_KS = (1, 3, 5, 10)
@@ -126,16 +126,38 @@ class QuestionResult:
     def reciprocal_rank(self) -> float:
         return 1.0 / min(self.ranks) if self.ranks else 0.0
 
+    def _share(self, key) -> float:
+        if not self.retrieved:
+            return 0.0
+        counts: dict = {}
+        for c in self.retrieved:
+            counts[key(c)] = counts.get(key(c), 0) + 1
+        return max(counts.values()) / len(self.retrieved)
+
     @property
     def top_doc_share(self) -> float:
         """Largest share of the retrieved set held by one document."""
-        if not self.retrieved:
-            return 0.0
-        counts: dict[tuple, int] = {}
-        for c in self.retrieved:
-            key = (c["ticker"], c["fiscal_year"])
-            counts[key] = counts.get(key, 0) + 1
-        return max(counts.values()) / len(self.retrieved)
+        return self._share(lambda c: (c["ticker"], c["fiscal_year"]))
+
+    @property
+    def top_entity_share(self) -> float:
+        """Largest share held by one FILER, across all of its vintages.
+
+        A low top-DOCUMENT share is not evidence of breadth: four vintages of
+        one filer taking eight of ten slots scores well on documents and is a
+        useless panel.
+
+        Read it with `distinct_entities`, never alone. A share is a ratio over
+        the retrieved set, and a quota SHRINKS that set -- at a quota of one,
+        a single-company question retrieves one chunk and scores 100%. The
+        count is the number that says whether a panel is possible.
+        """
+        return self._share(lambda c: c["ticker"])
+
+    @property
+    def distinct_entities(self) -> int:
+        """How many filers are represented at all. The panel measurement."""
+        return len({c["ticker"] for c in self.retrieved})
 
 
 @dataclass
@@ -160,6 +182,24 @@ class EvalReport:
     @property
     def top_doc_share(self) -> float:
         return (sum(r.top_doc_share for r in self.results) / self.n) if self.n else 0.0
+
+    @property
+    def top_entity_share(self) -> float:
+        return (sum(r.top_entity_share for r in self.results) / self.n) if self.n else 0.0
+
+    @property
+    def distinct_entities(self) -> float:
+        return (sum(r.distinct_entities for r in self.results) / self.n) if self.n else 0.0
+
+    def corpus_wide(self) -> "EvalReport":
+        """Only the questions with no ticker filter -- the panel-shaped ones.
+
+        A quota applied to a single-company question caps the one company that
+        was asked about, so measuring it over the whole set measures the cost
+        of misapplying it rather than the effect of applying it.
+        """
+        return EvalReport([r for r in self.results if r.question.ticker is None],
+                          self.ks)
 
     def misses(self, k: int) -> list[QuestionResult]:
         return [r for r in self.results if not r.hit_at(k)]
@@ -203,6 +243,14 @@ class EvalReport:
                 f"MRR {agnostic.mrr:.3f}")
         lines.append(f"mean top-document share of top-{max(self.ks)}   "
                      f"{self.top_doc_share:.1%}   (Audit R4 watch item)")
+        lines.append(f"mean top-entity   share of top-{max(self.ks)}   "
+                     f"{self.top_entity_share:.1%}   (what the R4 quota bounds)")
+        wide = self.corpus_wide()
+        if wide.n:
+            lines.append(
+                f"corpus-wide questions (n={wide.n}): mean distinct filers in "
+                f"top-{max(self.ks)} {wide.distinct_entities:.1f}, "
+                f"hit@{max(self.ks)} {wide.hit_rate(max(self.ks)):.1%}")
 
         lines.append(f"\nhit@{k_detail} by Item")
         for section, (hits, asked) in self.by_section(k_detail).items():
@@ -259,21 +307,27 @@ _COLS = ("chunk_id", "page", "end_page", "section", "ticker", "fiscal_year",
 
 
 def run_eval(questions: list[Question] | None = None, *, k: int = 10,
-             ks: tuple[int, ...] = DEFAULT_KS) -> EvalReport:
+             ks: tuple[int, ...] = DEFAULT_KS,
+             per_entity: int | None = None) -> EvalReport:
     """Retrieve for every question and score against the gold labels.
 
-    Retrieval goes through rag_chat's own SQL so the harness measures the
-    retriever the pipeline actually uses, not a reimplementation of it.
+    Retrieval goes through the chat module's own SQL so the harness measures
+    the retriever the pipeline actually uses, not a reimplementation of it --
+    including the R4 quota, so its cost in hit rate is measured rather than
+    assumed.
     """
     questions = questions or load_questions()
     vectors = _embed([q.question for q in questions])
+    sql = retrieval_sql(per_entity)
 
     results: list[QuestionResult] = []
     with get_conn() as conn:
         for question, qvec in zip(questions, vectors):
-            rows = conn.execute(RETRIEVAL_SQL, {
-                "qvec": qvec, "ticker": question.ticker,
-                "year": question.year, "k": max(k, max(ks))}).fetchall()
+            params = {"qvec": qvec, "ticker": question.ticker,
+                      "year": question.year, "k": max(k, max(ks))}
+            if per_entity is not None:
+                params["per_entity"] = per_entity
+            rows = conn.execute(sql, params).fetchall()
             retrieved = [dict(zip(_COLS, r)) for r in rows]
             ranks = [i + 1 for i, c in enumerate(retrieved) if question.relevant(c)]
             results.append(QuestionResult(question=question, ranks=ranks,
