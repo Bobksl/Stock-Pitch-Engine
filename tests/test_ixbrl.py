@@ -299,3 +299,34 @@ def test_real_filing_segment_operating_profit_is_available():
         "IntelligentCloudMember": Decimal("49584000000"),
         "MorePersonalComputingMember": Decimal("19309000000"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Dashes that mean zero (P3.4c)
+# ---------------------------------------------------------------------------
+
+class TestZeroDash:
+    """Oracle FY2022 and FY2023 print em dashes under ixt:zerodash -- 112 and
+    134 facts, every one a real zero -- and the whole filing failed to parse
+    over it. parse_number already intended a dash to mean zero; it only knew
+    the ASCII one."""
+
+    def test_the_zerodash_rule_is_zero_whatever_the_glyph(self):
+        for glyph in ("\u2014", "\u2013", "-", "\u2212"):
+            assert parse_number(glyph, "ixt:zerodash") == Decimal(0)
+
+    def test_an_em_dash_is_zero_even_with_no_rule_declared(self):
+        """Not every filer declares the transform, and a lone dash in a
+        numeric cell has only ever meant one thing."""
+        assert parse_number("\u2014") == Decimal(0)
+
+    def test_nocontent_is_zero(self):
+        assert parse_number("", "ixt:nocontent") == Decimal(0)
+
+    def test_fixed_one_survived_the_refactor(self):
+        assert parse_number("anything", "ixt:fixed-one") == Decimal(1)
+
+    def test_a_dash_inside_a_real_number_is_not_swallowed(self):
+        """Only an all-dash cell is zero. A negative number keeps its sign."""
+        assert parse_number("-1,234") == Decimal(-1234)
+        assert parse_number("(1,234)") == Decimal(-1234)
