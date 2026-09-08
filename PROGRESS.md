@@ -122,13 +122,125 @@ section 1 assembly, and building them now would be speculative.
   test fixture silently stops matching the live data it claims to mirror.
 - The em-dash joins U+2212 on the GBK console list. `render()` uses ASCII hyphens.
 
+### The corpus is now nine filers, chosen for the contested type field (P3.4c)
+
+AVGO's type field is `contested`, so `requires_both_types` is True and a
+semiconductor-only comp set is precisely what `comp_set_not_type_justified`
+blocks. Ingested accordingly, five 10-K years each, all reconciled against
+`companyfacts` with zero mismatches:
+
+- **semiconductors** — MRVL (custom silicon and networking for the same
+  hyperscaler buyers; the closest direct competitor AVGO has), QCOM, plus the
+  already-loaded NVDA and AMD
+- **infrastructure software** — ORCL and IBM, both running the
+  acquire-and-harvest model VMware and CA economics actually resemble, plus the
+  already-loaded MSFT
+
+Second reason the set earns its ingest cost: **seven distinct fiscal calendars
+across nine filers** — QCOM 09-28, AAPL 09-27, AVGO 11-02, AMD 12-27, IBM
+12-31, NVDA 01-25, MRVL 01-31, ORCL 05-31, MSFT 06-30. P3.5 period alignment
+gets a live stress test rather than a contrived one.
+
+### Fork 1 resolved differently: moomoo, not a Bloomberg CSV
+
+`schema_prices.sql` + `src/ingest/prices.py`. Prices come from moomoo through
+the OpenD gateway the owner already runs. Better than the approved CSV route on
+the constraint that mattered: **there is no export file to keep out of git,
+because nothing is written to disk at all.** 10 tickers x 1,259 daily bars,
+identical date ranges, benchmark (SPY) included.
+
+- **No float is ever constructed.** `json.loads(parse_float=Decimal)` builds the
+  value from the vendor's own source text, so `money.py` still has exactly TWO
+  sanctioned crossings and this is not a third. Column is NUMERIC.
+- **Adjustment is part of the primary key.** A drawdown across a split boundary
+  on raw prices is wrong by the split ratio — AVGO's 10:1 would read as a 90%
+  crash — so raw and forward-adjusted cannot share a key.
+- The SDK lives in a different interpreter (`MOOMOO_PYTHON`, default
+  `C:\Python314\python.exe`) and the boundary is JSON over stdout. A market-data
+  client has no business in the venv that parses filings, and the boundary is
+  what makes the loader testable without a gateway.
+- **Operational limit:** moomoo's history quota is 100 distinct securities per
+  user, one slot per new ticker. 10 used. Ample for comp sets, not for
+  exploratory pulls.
+
+moomoo also proposes comp sets: `get_owner_plate US.AVGO` gives
+`US.LIST2015 Semiconductors [INDUSTRY]`, and `US.LIST2508 Software -
+Infrastructure` exists separately — which is what a contested type field needs.
+It cannot ingest filings; EDGAR remains the only fact source (P2), and its
+`get_financials_revenue_breakdown` is a vendor normalisation, admissible at most
+as a second reconciliation oracle alongside `companyfacts`, never as a fact.
+
+### Three Phase 0 defects the peer ingest surfaced
+
+1. **Item 8 by cross-reference was rejected.** `sections/us.py` required every
+   Item in `REQUIRED` to exceed `MIN_SECTION_CHARS`. QCOM FY2022-25 satisfy Item
+   8 by pointing at an F-page appendix in 152 characters; their own FY2021
+   writes the same pointer in 363 and passed only because it was wordier. A rule
+   whose outcome turns on the verbosity of a pointer measures nothing. Item 8
+   must still ANCHOR; it is exempt from the length check alone (`THIN_ALLOWED`),
+   and a thin Item 1 still fails.
+2. **`ixt:zerodash` was unparseable.** ORCL FY2022 and FY2023 print em dashes
+   under it — 112 and 134 facts, every one a real zero — and the whole filing
+   failed to parse. `parse_number` already intended a dash to mean zero; it only
+   knew the ASCII one. Same family as U+2212 on a GBK console: right intent,
+   too narrow a character set. Now `DASHES` covers the Unicode dash family and
+   `ZERO_RULES` covers `zerodash` / `nocontent`.
+3. **Not fixed, recorded:** one ORCL document yields no Item headings the regex
+   can find. Four of five segment, facts are complete, four years is enough for
+   a panel. A third parser fix in one sitting is not the best use of the phase.
+
+### Segment revenue does not always add up, and the suite caught it
+
+QCOM's segment revenue does not sum to its consolidated total: it tags
+QCT / QTL / QSI on the segment axis and leaves nonreportable-segment revenue
+untagged, with `us-gaap:AllOtherSegmentsMember` carrying profit and no revenue.
+ASC 280 does not require otherwise, so the breakdown is **complete as filed and
+still does not add up**.
+
+`test_every_filer_year_reconciles` asserted that segment revenue always sums.
+That was written when the corpus was four filers which all happened to tag
+segments completely, and it is not a property of 10-Ks. It is now a declared
+`NON_RECONCILING` list asserting BOTH directions: an unlisted filer that stops
+reconciling fails, and a listed filer that starts reconciling fails as stale.
+Same discipline as exception expiry in 6.5 — the list cannot rot into a
+carve-out.
+
+QCOM also reports segment profit as **EBT**, not `OperatingIncomeLoss`.
+Deliberately NOT mapped through `concept_map` overrides: EBT is not operating
+income, and mixing the two across a panel is the `comp_definitions_inconsistent`
+Class A failure. **QCOM is a consolidated-panel peer, not a segment-exhibit one.**
+
+### Retrieval: the quota, measured against a set that can measure it
+
+The labelled set had 4 corpus-wide questions and 2 with gold in more than one
+filer, which cannot evaluate a panel retriever. Now 9 and 7. Over those 7:
+
+| quota | distinct filers | hit@10 | recall@10 | MRR |
+|---|---|---|---|---|
+| none | 2.6 | 100.0% | 75.0% | 0.929 |
+| 2 | 5.4 | 100.0% | 78.6% | 0.929 |
+
+The quota **doubles panel breadth at no cost to hit rate**. An earlier reading
+showed hit@10 falling 93.2% -> 81.8%; that ran over all 44 questions, 40 of
+which set a ticker filter, so it measured the cost of capping the single company
+the question asked about. Given a question set shaped like the thing being
+measured, the trade-off disappears.
+
+Three candidate questions were probed and **dropped** rather than labelled
+optimistically (customer concentration is not cross-company however worded;
+China concentration duplicates export controls; engineering talent retrieves
+competition passages and the human-capital text was never confirmed present).
+
+**Do not compare retrieval scores across question-set versions.** The headline
+moved from hit@5 88.6% / MRR 0.820 to 89.8% / 0.828 purely because the
+denominator went from 44 questions to 49.
+
 ### Next
-P3.2 KPI taxonomy (`config/kpi_taxonomy.yaml`, derived KPIs as a `CellRegistry`), then P3.3
-section 1 assembly. **P3.4 (R4 per-entity retrieval quota) must land before section 2**:
-`RETRIEVAL_SQL` is a plain `ORDER BY ... LIMIT k` with no window function, and the measured
-top-doc share of top-10 is 49.1%, so one document takes half the slots in a cross-company
-panel. Owner dependencies still open: the Bloomberg price export (fork 1) and the AVGO RV
-comps re-pull, which still has no growth and no profitability column.
+and the 2.4 industry panel, over nine filers with seven distinct fiscal calendars. The SEC
+`frames` tolerance constant is to be READ from SEC documentation and cited in code, not
+guessed, and it is NOT `ANNUAL_MIN_DAYS/MAX_DAYS`, which answers a different question. Then
+P3.6 peer drawdown, which now has its price data. Still open: the AVGO RV comps re-pull (no
+growth column, no profitability column) — needed for 4.8, not for phase 3.
 
 ---
 
