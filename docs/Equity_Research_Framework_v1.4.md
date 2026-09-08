@@ -1,11 +1,15 @@
-# AI Equity Research Framework — v1.3
+# AI Equity Research Framework — v1.4
 
-**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-07
+**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-08
 **Scope:** US-listed equities (SEC EDGAR), position horizon (months–quarters), IT sector first
 **Output:** Polished shareable pitch + auditable Excel valuation model
 **Mode:** Interactive co-pilot, section by section
 
 ## Changelog
+
+**v1.4 — 2026-09-08**
+
+- **§6.3** — "the latest filed period" is stated at the **periodicity of the draft**. A balance-sheet instant (inventory, RPO, cash, debt) is compared against the latest instant at an annual reporting date, not against the latest instant on record. Phase 3 hit this the first time any draft cited an instant concept: `companyfacts` carries later quarter-end balances, so Broadcom's FY2025 remaining performance obligation read as stale against a Q2-2026 balance — and quoting that Q2 balance inside an annual overview would break period comparability, which is the failure §2.4 exists to prevent. Duration concepts already behaved this way through the annual filter in the facts API, so the rule was silently asymmetric between the two kinds of fact and the asymmetry was invisible until a draft cited an instant.
 
 **v1.3 — 2026-09-07**
 
@@ -487,6 +491,8 @@ Stripping promotional adjectives must not discard **substance**. Any newly discl
 
 ### 6.3 Recency Rule
 Every figure from the latest filed period. Any prior-year figure must appear alongside its current-year comparative. Automated staleness check against the facts table.
+
+**Periodicity.** "The latest filed period" means the latest period *of the periodicity the draft is written at*. For a duration figure in an annual draft that is the latest fiscal year; for a **balance-sheet instant** it is the balance at the latest annual reporting date, not the most recent instant on record. A filer's later interim balances are legitimately in the facts table and are legitimately newer, and importing one into an annual section would mix periods rather than refresh them — the cross-sectional corruption §2.4 forbids, arriving through the time axis instead of across peers.
 
 ### 6.4 Provenance Model
 
