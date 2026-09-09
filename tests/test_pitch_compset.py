@@ -176,11 +176,21 @@ class TestTiers:
         cs = _built(members=FIVE[:3] + (both,) + FIVE[4:])
         assert both in cs.direct and both in cs.valuation_reference
 
-    def test_the_panel_membership_is_the_direct_tier(self):
-        """2.3: direct competitors feed the structural analysis of 2.5, which
-        is what the 2.4 industry panel serves."""
+    def test_the_panel_covers_every_member_not_just_the_direct_tier(self):
+        """2.4 says "for every comp-set member". The panel is the extraction;
+        the tiers decide which ANALYSIS consumes which members.
+
+        Reading it as the direct tier had a visible symptom: the panel fell
+        below 4.8's minimum while the comp set itself did not, and the two are
+        counts of the same set."""
         assert set(_built().panel_members()) == {
-            "MRVL": 1835632, "NVDA": 1045810, "AMD": 2488, "QCOM": 804328}.keys()
+            "MRVL", "NVDA", "AMD", "QCOM", "IBM"}
+
+    def test_the_structural_analysis_reads_the_direct_tier(self):
+        """2.5's share dispersion and what-firms-compete-on are statements
+        about people fighting over the same customer."""
+        assert set(_built().structural_members()) == {
+            "MRVL", "NVDA", "AMD", "QCOM"}
 
     def test_below_the_minimum_is_reported_not_raised(self):
         """4.8's minimum is Class B and exceptionable, so it is a finding the

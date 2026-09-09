@@ -160,12 +160,29 @@ class CompSet:
         return tuple(m for m in self.members if m.is_valuation_reference)
 
     def panel_members(self) -> dict[str, int]:
-        """{ticker: cik} for the 2.4 industry panel -- the DIRECT tier.
+        """{ticker: cik} for the 2.4 industry panel -- EVERY comp-set member.
 
-        2.3 assigns the tiers to different consumers: direct competitors to the
-        structural analysis, valuation references to section 4. Handing the
-        panel the valuation tier would compare the target against companies
-        chosen for their multiples.
+        2.4 says "for every comp-set member", and it means it: the panel is the
+        extraction, and the tiers decide which ANALYSIS consumes which members,
+        not who is measured. 2.5's structural work reads the direct tier
+        (`structural_members`) and section 4's comps read the valuation tier;
+        both read a panel that covers the whole set.
+
+        Restricting the panel to the direct tier was a misreading, and it had a
+        visible symptom: on a plausible Broadcom tiering only three names are
+        direct competitors, so the panel fell below 4.8's minimum of five while
+        the comp set itself did not. The two counts should not diverge, because
+        they are counts of the same set.
+        """
+        return {m.ticker: m.cik for m in self.members}
+
+    def structural_members(self) -> dict[str, int]:
+        """{ticker: cik} the 2.5 structural analysis reads -- the DIRECT tier.
+
+        2.3 sends direct competitors to the structural analysis and valuation
+        references to section 4. Share dispersion and "what firms compete on"
+        are statements about people fighting over the same customer, and a
+        company chosen for its multiple has no place in them.
         """
         return {m.ticker: m.cik for m in self.direct}
 

@@ -1,0 +1,95 @@
+# Broadcom comp set — framework 2.3, manually approved.
+#
+# 2.3 auto-PROPOSES from the type field and revenue-model tags, and requires a
+# human to approve with a written justification per member. This file is that
+# approval, which is why it is checked in and reviewable rather than derived at
+# run time.
+#
+# The type field is CONTESTED: 57.69% of revenue and 50.56% of profit in
+# Semiconductor Solutions against 42.31% / 49.44% in Infrastructure Software.
+# `requires_both_types` is therefore True, and a set drawn from the GICS
+# semiconductor label alone trips `comp_set_not_type_justified` (C1) because it
+# prices the smaller half of the earnings. IBM and ORCL are here for that
+# reason, not as an afterthought.
+#
+# Tiers go to different consumers (2.3): direct competitors to the 2.5
+# structural analysis, valuation references to section 4 comps. Both appear in
+# the 2.4 panel, which covers every comp-set member.
+
+members:
+  - ticker: MRVL
+    cik: 1835632
+    tiers: [direct_competitor, valuation_reference]
+    covers_type: Semiconductor Solutions
+    justification: >-
+      Custom silicon and networking sold into the same hyperscaler buying
+      decision, competing for the same sockets at comparable scale. The closest
+      direct competitor Broadcom has.
+    approved_by: Bob Liang
+    approved_on: 2026-09-09
+
+  - ticker: NVDA
+    cik: 1045810
+    tiers: [direct_competitor]
+    covers_type: Semiconductor Solutions
+    justification: >-
+      Accelerated-compute silicon bought by the same hyperscalers for the same
+      data-centre budget. Direct on customer and buying decision; NOT a
+      valuation reference, because a roughly tenfold size gap and a different
+      margin structure is exactly the 10x gap 2.3 says disqualifies one.
+    approved_by: Bob Liang
+    approved_on: 2026-09-09
+
+  - ticker: AMD
+    cik: 2488
+    tiers: [direct_competitor, valuation_reference]
+    covers_type: Semiconductor Solutions
+    justification: >-
+      Data-centre compute sold into the same buying decision at comparable
+      scale, with a similar fabless capital profile.
+    approved_by: Bob Liang
+    approved_on: 2026-09-09
+
+  - ticker: IBM
+    cik: 51143
+    tiers: [valuation_reference]
+    covers_type: Infrastructure Software
+    justification: >-
+      Mainframe and infrastructure software run on the same acquire-and-harvest
+      maintenance economics as VMware and CA. A valuation reference and not a
+      direct competitor: it does not compete for the same customer decision.
+    approved_by: Bob Liang
+    approved_on: 2026-09-09
+
+  - ticker: QCOM
+    cik: 804328
+    tiers: [valuation_reference]
+    covers_type: Semiconductor Solutions
+    justification: >-
+      Wireless and RF silicon with a comparable fabless margin and R&D-intensity
+      profile. A valuation reference and not a direct competitor: handset
+      modems are a different customer and a different buying decision.
+      NOTE its September fiscal year end, and that its segment revenue does not
+      sum to its consolidated total, so it is a consolidated-panel peer only.
+    approved_by: Bob Liang
+    approved_on: 2026-09-09
+
+  - ticker: ORCL
+    cik: 1341439
+    tiers: [valuation_reference]
+    covers_type: Infrastructure Software
+    justification: >-
+      Enterprise infrastructure software with the maintenance-and-renewal
+      economics VMware runs on, at comparable scale. Second software comparator
+      so that half of a CONTESTED type field does not rest on IBM alone.
+    approved_by: Bob Liang
+    approved_on: 2026-09-09
+
+structural_conclusion: >-
+  Rivalry runs on design wins and roadmap timing rather than on price, so
+  incumbency at a socket is worth more than a unit-cost advantage.
+
+profit_capture_conclusion: >-
+  Profit sits with the design owners rather than the foundries, which take
+  capital risk for a fee, and it is moving further toward whoever controls the
+  software layer above the silicon.

@@ -171,6 +171,18 @@ _HEADER_UNIT_RE = re.compile(
     r"[(\[]?\s*(?:(US\$|HK\$|NT\$|USD|HKD|TWD|\$|€|£)\s*)?"
     r"(trillion|billion|million|thousand|bn|mn|tn|m|b|k)\s*[)\]]?\s*$", re.I)
 _HEADER_PERCENT_RE = re.compile(r"[(\[]?\s*(%|percent|bps|pp)\s*[)\]]?\s*$", re.I)
+# A multiple or a count of days is a UNIT, not a magnitude: the figure is
+# already in its own terms and the scale is 1. Declaring it still matters --
+# a bare 0.42 in an unlabelled column is `scale_undeclared` and should be,
+# and 2.4's drawdown table needs both of these to say what its columns are.
+# Widening what CAN be declared, never starting to guess.
+_HEADER_MULTIPLE_RE = re.compile(r"[(\[]\s*(x|×)\s*[)\]]\s*$", re.I)
+_HEADER_DAYS_RE = re.compile(r"[(\[]\s*days?\s*[)\]]\s*$", re.I)
+# A correlation and a beta are dimensionless: neither a magnitude nor a
+# multiple of anything a reader would name. "(ratio)" says so explicitly,
+# which is what the rule asks for -- the figure must DECLARE its scale, not
+# have one guessed for it.
+_HEADER_RATIO_RE = re.compile(r"[(\[]\s*ratio\s*[)\]]\s*$", re.I)
 
 
 def _cells(line: str) -> list[tuple[int, int]]:
@@ -198,6 +210,10 @@ def header_scale(header: str) -> tuple[Decimal | None, str | None, str | None]:
     'Revenue ($m)' -> (1e6, 'USD', currency)   ·   'Margin (%)' -> (0.01, None, percent)
     """
     text = header.strip().rstrip(":")
+    if _HEADER_MULTIPLE_RE.search(text):
+        return Decimal(1), None, KIND_MULTIPLE
+    if _HEADER_DAYS_RE.search(text) or _HEADER_RATIO_RE.search(text):
+        return Decimal(1), None, KIND_BARE
     if pct := _HEADER_PERCENT_RE.search(text):
         token = pct.group(1).lower()
         scale = BPS_SCALE if token == "bps" else PERCENT_SCALE
@@ -250,7 +266,8 @@ _NUMERAL_RE = re.compile(rf"""
        |(?P<short>[bmkt])(?![A-Za-z]))?
     (?(open)\s*\))
     (?:\s?(?P<scale_out>{_SCALE_ALT})(?![A-Za-z]))?
-    (?:\s?(?P<suffix>%|bps(?![A-Za-z])|pp(?![A-Za-z])|x(?![A-Za-z])|×))?
+    (?:\s?(?P<suffix>%|bps(?![A-Za-z])|pp(?![A-Za-z])|x(?![A-Za-z])|×
+       |days?(?![A-Za-z])))?
 """, re.VERBOSE | re.IGNORECASE)
 
 _SHARES_RE = re.compile(r"^\W*(?:diluted\s+|basic\s+|common\s+)?shares\b", re.I)
@@ -265,6 +282,11 @@ def _classify(m: re.Match, after: str) -> tuple[str, str | None]:
     suffix = (m.group("suffix") or "").lower()
     if suffix in ("%", "bps", "pp"):
         return KIND_PERCENT, "pure"
+    if suffix in ("day", "days"):
+        # A count of days. Its own unit, scale 1, and writable inline so an
+        # inventory-days KPI can sit in a mixed-unit table without the column
+        # header having to declare something that differs per row.
+        return KIND_BARE, "pure"
     if suffix in ("x", "×"):
         return KIND_MULTIPLE, "pure"
     if symbol := m.group("currency"):
@@ -347,6 +369,12 @@ def extract_claims(md: str) -> list[NumericClaim]:
             token = (m.group("suffix") or "").lower()
             scale = BPS_SCALE if token == "bps" else PERCENT_SCALE
             source = SCALE_INLINE
+        elif (m.group("suffix") or "").lower() in ("x", "×", "day", "days"):
+            # A multiple and a count of days are their own units at scale 1.
+            # Written inline they ARE declared -- the figure says what it is --
+            # which is what lets a mixed-unit table (a KPI snapshot holding
+            # percentages and inventory days at once) resolve at all.
+            scale, source = Decimal(1), SCALE_INLINE
 
         column = None
         if scale is None and line_idx in headers:

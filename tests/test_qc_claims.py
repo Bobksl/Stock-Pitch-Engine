@@ -265,3 +265,47 @@ def test_an_unfenced_model_cells_section_is_masked_too():
           "## Citation index\n\n"
           "F1: {kind: fact, cik: 789019}\n")
     assert [c.text for c in extract_claims(md)] == ["$50 billion"]
+
+
+# ---------------------------------------------------------------------------
+# Multiple and day columns (P3.8)
+# ---------------------------------------------------------------------------
+
+class TestMultipleAndDayHeaders:
+    """2.4's peer drawdown table needs both, and neither was recognised.
+
+    A column headed '(x)' declares its figures are multiples and one headed
+    '(days)' declares a count of days. Before this, a downside capture of 0.42
+    in a table was `scale_undeclared` -- correctly, since nothing had declared
+    what it was -- and the only escape was writing '0.42x' inline, which is
+    wrong for a correlation and a beta that are not multiples of anything.
+    """
+
+    def test_a_multiple_column_declares_its_scale(self):
+        scale, currency, kind = header_scale("Downside capture (x)")
+        assert scale == Decimal(1) and currency is None
+        assert kind == KIND_MULTIPLE
+
+    def test_the_unicode_multiplication_sign_works_too(self):
+        assert header_scale("EV/EBITDA (×)")[0] == Decimal(1)
+
+    def test_a_days_column_declares_its_scale(self):
+        scale, _, kind = header_scale("Recovery (days)")
+        assert scale == Decimal(1) and kind == KIND_BARE
+
+    def test_a_figure_under_a_multiple_header_is_declared(self):
+        md = ("| Peer | Capture (x) |\n|---|---|\n| IBM | 0.42 |\n")
+        claim = next(c for c in extract_claims(md) if c.digits == Decimal("0.42"))
+        assert claim.scale_declared
+        assert claim.value == Decimal("0.42")
+
+    def test_a_figure_under_a_days_header_is_declared(self):
+        md = ("| Peer | Recovery (days) |\n|---|---|\n| IBM | 106 |\n")
+        claim = next(c for c in extract_claims(md) if c.digits == Decimal("106"))
+        assert claim.scale_declared and claim.value == Decimal("106")
+
+    def test_an_unlabelled_column_is_still_undeclared(self):
+        """The fix widens what CAN be declared; it does not start guessing."""
+        md = "| Peer | Capture |\n|---|---|\n| IBM | 0.42 |\n"
+        claim = next(c for c in extract_claims(md) if c.digits == Decimal("0.42"))
+        assert not claim.scale_declared

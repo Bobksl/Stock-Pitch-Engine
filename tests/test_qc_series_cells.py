@@ -101,19 +101,51 @@ class TestAgainstSeededPrices:
 
     def test_recovery_days_counts_from_trough_back_to_peak(self):
         """Trough on 2001-01-03, back to 110 on 2001-01-05: two days."""
+        window = {"from": START, "to": END}
         reg = self._registry({"rec": {
             "op": "recovery_days", "unit": "days",
-            "inputs": [{"series": TICKER, "from": START, "to": END}]}})
+            "inputs": [{"series": TICKER, **window},
+                       {"series": TICKER, **window}]}})
         assert reg.compute("rec").value == Decimal(2)
+
+    def test_the_window_defines_the_drawdown_and_the_second_series_the_search(self):
+        """Two series, and each does a different job.
+
+        Found on real prices twice over. Bounding the search at the benchmark's
+        own recovery reported AMD and MRVL as never recovering from 2022, when
+        they took 459 and 671 days. Handing the op one EXTENDED slice instead
+        made it recompute a different peak and trough and answer about a
+        different drawdown -- Broadcom moved from 215 days to 59, silently
+        measuring the 2025 fall.
+
+        Here the window ends before the recovery, so a single-series reading
+        would raise; the forward series finds it.
+        """
+        window = {"from": START, "to": date(2001, 1, 4)}
+        forward = {"from": START, "to": END}
+        reg = self._registry({"rec": {
+            "op": "recovery_days", "unit": "days",
+            "inputs": [{"series": TICKER, **window},
+                       {"series": TICKER, **forward}]}})
+        assert reg.compute("rec").value == Decimal(2)
+
+        bounded = self._registry({"rec": {
+            "op": "recovery_days", "unit": "days",
+            "inputs": [{"series": TICKER, **window},
+                       {"series": TICKER, **window}]}})
+        with pytest.raises(CellError, match="not recovered"):
+            bounded.compute("rec")
 
     def test_an_unrecovered_drawdown_refuses_rather_than_returning_zero(self):
         """There is no number, so there is no figure. A cell that cannot be
         computed blocks the draft, which is the correct outcome -- the prose
         has to say 'not recovered' without citing a numeral."""
         _seed([100, 110, 88, 90, 92], TICKER + "2")
+        window = {"from": START, "to": END}
         reg = self._registry({"rec": {
             "op": "recovery_days", "unit": "days",
-            "inputs": [{"series": TICKER + "2", "from": START, "to": END}]}})
+            "inputs": [{"series": TICKER + "2", **window},
+                       {"series": TICKER + "2", **window}]}})
         with pytest.raises(CellError, match="not recovered"):
             reg.compute("rec")
         from src.db import get_conn

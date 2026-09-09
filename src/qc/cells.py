@@ -98,14 +98,29 @@ def _series_max_drawdown(series):
     return max_drawdown(series)[0]
 
 
-def _series_recovery_days(series):
+def _series_recovery_days(window, forward):
+    """Days from the WINDOW's trough back to the WINDOW's peak price.
+
+    Two series, deliberately. The first defines which drawdown is being
+    measured; the second is searched forward for the recovery, and runs past
+    the window's end because how long a peer took to regain its peak is a
+    property of that peer, not of the benchmark's calendar.
+
+    One series cannot express this. Handed only the window, a peer slower than
+    the market reads as never recovering; handed only an extended slice, the op
+    recomputes a different peak and trough and answers about a different
+    drawdown entirely. Both were live: bounding at the benchmark reported AMD
+    and MRVL as unrecovered from 2022, and extending the single slice moved
+    AVGO from 215 days to 59 by silently measuring the 2025 drawdown instead.
+    """
     from src.pitch.drawdown import max_drawdown, recovery_date
-    _, peak, trough = max_drawdown(series)
-    recovered = recovery_date(series, peak, trough)
+    _, peak, trough = max_drawdown(window)
+    recovered = recovery_date(forward, peak, trough)
     if recovered is None:
         raise CellError(
-            "the drawdown is not recovered within this window, so there is no "
-            "recovery time to cite. Reporting zero would invert the reading")
+            "the drawdown is not recovered by the end of the price history, so "
+            "there is no recovery time to cite. Reporting zero would invert "
+            "the reading")
     return Decimal((recovered - trough).days)
 
 
@@ -136,7 +151,7 @@ def _series_beta(peer, benchmark):
 
 SERIES_OPS: dict[str, tuple[int, Any]] = {
     "max_drawdown": (1, _series_max_drawdown),
-    "recovery_days": (1, _series_recovery_days),
+    "recovery_days": (2, _series_recovery_days),
     "downside_capture": (2, _series_downside_capture),
     "correlation": (2, _series_correlation),
     "stress_beta": (2, _series_beta),

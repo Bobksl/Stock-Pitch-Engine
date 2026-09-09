@@ -69,6 +69,12 @@ class IndustryPanel:
     aligned: dict[str, Aligned] = field(default_factory=dict)
     #: label -> why it is not in the panel. Never silently dropped.
     excluded: dict[str, str] = field(default_factory=dict)
+    #: label -> the annual period considered, for every member aligned OR not.
+    #: The exhibit names an excluded peer by its FISCAL DATES rather than by a
+    #: day count: dates are masked by claims.py, a day count is a numeral, and
+    #: an unanchored numeral in a draft is a figure with no provenance -- which
+    #: the gate blocks, correctly, even when it is construction metadata.
+    considered: dict[str, tuple[date, date]] = field(default_factory=dict)
     ciks: dict[str, int] = field(default_factory=dict)
     cells: dict[str, dict] = field(default_factory=dict)
     registry: CellRegistry | None = None
@@ -113,7 +119,8 @@ class IndustryPanel:
                 f"than none")
 
         panel = cls(calendar_year=calendar_year, aligned=aligned,
-                    excluded=excluded, ciks={l: members[l] for l in aligned})
+                    excluded=excluded, considered=dict(periods),
+                    ciks={l: members[l] for l in aligned})
 
         for label in aligned:
             current = next(f for f in series[label]
