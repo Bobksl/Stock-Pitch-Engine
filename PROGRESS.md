@@ -11,9 +11,43 @@
 
 ---
 
-## Status: PHASE 3 IN PROGRESS - sections 1 and 2 (2026-09-07)
+## Status: PHASE 3 COMPLETE — sections 1 and 2 ✅ (2026-09-09)
 
-Branch `phase-3-sections` off `main`, 3 commits, **not pushed**. 654 passed, 0 skipped.
+Branch `phase-3-sections` off `main`, 19 commits, **not pushed**. 900 passed, 0 skipped.
+Spec advanced v1.2 → **v1.5**.
+
+**Exit criterion met.** Both halves.
+
+```bash
+python scripts/draft_pitch.py AVGO --sections 1,2 --qc
+```
+```
+102 numeric claim(s) checked, 102 resolved
+
+QC PASSED
+
+EXHIBITS: 5 panel members, 2 excluded, 2 stress window(s)
+```
+
+Unlike phase 2 there was no published answer to reproduce, so the criterion tests
+**verifiability** — every figure resolves, from the latest filed period, with all five
+1.5 / 2.6 exhibits present — and **detection**, each new rule having a degraded draft that
+trips exactly it. `tests/test_phase3_exit_criterion.py` asserts all four clauses in one
+place; every other test still scopes to the rules it is about.
+
+The generated Section 2 panel, every figure content-addressed and recomputed at
+verification time:
+
+```
+| Member | Revenue share | Growth | Gross | EBIT  | R&D   | Capex |
+| AMD    |  8.88         | 34.34  | 49.52 | 10.66 | 23.36 | 2.81  |
+| AVGO   | 16.37         | 23.87  | 67.77 | 39.89 | 17.18 | 0.98  |
+| IBM    | 17.31         |  7.62  | 58.19 |  n/a  | 12.31 | 1.62  |
+| MRVL   |  2.10         | 42.09  | 51.02 | 16.14 | 25.32 | 4.32  |
+| NVDA   | 55.34         | 65.47  | 71.07 | 60.38 |  8.57 | 2.80  |
+| ORCL   | EXCLUDED | fiscal year 2025-06-01..2026-05-31 does not align (§2.4) |
+| QCOM   | EXCLUDED | fiscal year 2024-09-30..2025-09-28 does not align (§2.4) |
+```
 
 **Phase numbering settled.** The audit's build sequence and the README's phase table
 disagreed. The audit wins - it is the more specific document and its sequencing rationale is
@@ -236,12 +270,116 @@ competition passages and the human-capital text was never confirmed present).
 moved from hit@5 88.6% / MRR 0.820 to 89.8% / 0.828 purely because the
 denominator went from 44 questions to 49.
 
-### Next
-and the 2.4 industry panel, over nine filers with seven distinct fiscal calendars. The SEC
-`frames` tolerance constant is to be READ from SEC documentation and cited in code, not
-guessed, and it is NOT `ANNUAL_MIN_DAYS/MAX_DAYS`, which answers a different question. Then
-P3.6 peer drawdown, which now has its price data. Still open: the AVGO RV comps re-pull (no
-growth column, no profitability column) — needed for 4.8, not for phase 3.
+### Built (P3.2 – P3.8)
+
+`src/pitch/` is the pitch layer, deliberately separate from `src/sections/`, which already
+means Item-anchored segmentation of a *filing*.
+
+- **`types.py`** — 1.4h `TypeField`, three verdicts (see the near-tie finding above)
+- **`kpi.py`** + `config/kpi_taxonomy.yaml` — the section 7 taxonomy, 44 entries. Derived
+  KPIs are model cells recomputed at verification time; 27 of 44 are `filing_text`
+- **`draft.py`** — slot rendering. The LLM writes prose with named slots and no numerals; a
+  numeral surviving in a template is `llm_computed_arithmetic`. Markers are
+  **content-addressed** (6.4), which the hand-written phase-1 fixtures are not
+- **`overview.py`** — Section 1 evidence and its three 1.5 exhibits
+- **`panel.py`** — 2.4 period alignment; **`industry.py`** — the 2.4 panel
+- **`drawdown.py`** — 2.4 / 2.5i peer drawdown, windows derived from the benchmark
+- **`compset.py`** — 2.3 two-tier comp set; **`primer.py`** — 2.8 versioned primer
+- **`section2.py`** — Section 2 evidence and its three 2.6 exhibits
+- `src/qc/prose_rules.py`, `src/ingest/prices.py`, `schema_prices.sql`,
+  `scripts/draft_pitch.py`, `config/comp_sets/avgo.yaml`
+
+### Spec amendments (v1.2 → v1.5)
+
+- **v1.3** — 6.5 Class A generalised from "the figure is wrong" to cover prose;
+  `filing_text_disclosure` added to 6.4's vocabulary; 1.6's "so what" test became a
+  Measurement; three of 2.7's five conditions became construction-time invariants
+- **v1.4** — 6.3 stated at the **periodicity of the draft**
+- **v1.5** — 6.4 admits **series-valued inputs** and a closed set of series operations
+
+### Period alignment: SEC answers one question of the two
+
+"Is this an annual period?" is SEC's, documented and cited: an annual frame is **365 days
+± 30**. "Which calendar year is it?" is **not** — the documentation says only "the dates that
+best align", and publishes no assignment tolerance. Inventing one and attributing it to SEC
+would have been worse than owning it, so the measure is stated in `src/pitch/panel.py`: days
+of the fiscal period falling inside the calendar year.
+
+The floor is 300/365 and it is **not knife-edge** — every value from 272 to 306 selects the
+same five members, because the corpus has a real gap between Broadcom at 306 and Qualcomm at
+271. Three constants must never be confused and the module says so: SEC's
+`ANNUAL_TOLERANCE_DAYS` (is it a year), this project's `DEFAULT_MIN_OVERLAP_DAYS` (which
+year), and `facts/api.ANNUAL_MIN_DAYS/MAX_DAYS` (which rows to fetch).
+
+### Findings that changed the code
+
+**A drawdown could not be a derived figure, and all three routes failed it.** Prices are not
+in XBRL so it cannot be a fact; `sum/difference/product/ratio/growth` cannot express a
+drawdown; and an external record carries a *value*, so putting a statistic there records it
+rather than recomputing it — and a wrong drawdown recorded faithfully verifies clean, which
+is the hole 6.4 exists to close. v1.5 widens the vocabulary instead. `SERIES_OPS` is kept
+**separate** from `OPS` and the two refuse to mix in both directions.
+
+**`recovery_days` needs two series, and one-series readings both looked plausible.** Bounded
+at the benchmark's recovery, AMD and MRVL read as never recovering from 2022 when they took
+459 and 671 days. Handed one extended slice, the op recomputed a different peak and trough
+and answered about a *different* drawdown — Broadcom moved from 215 days to 59, silently
+measuring the 2025 fall. The window defines which drawdown; a second, longer series is
+searched forward for the recovery.
+
+**`claims.py` could not declare a multiple or a count of days.** A downside capture of 0.42
+under a column headed `(x)` was `scale_undeclared` — correctly, since nothing had declared
+what it was. Added `(x)`, `(days)` and `(ratio)` headers plus inline `x` / `days`, which is
+what lets a KPI snapshot hold percentages and inventory days in one column. Widening what
+*can* be declared; never guessing.
+
+**A cell's `unit` is provenance and its `display` is presentation.** Conflating them
+multiplied a downside capture of 2.52 by a hundred and wrote 252.26 under a column headed
+`(x)`.
+
+**Metadata numerals are still figures.** The benchmark's own drawdown written into a caption,
+and a day count in an exclusion reason, are both unanchored numerals and the gate blocks
+them. The benchmark drawdown became a cell; an excluded peer is now named by its **fiscal
+dates**, which `claims.py` masks, with the arithmetic kept in the CLI output.
+
+### A misreading of mine, corrected
+
+I reported a framework tension: that 1.4h demands both types while 2.4's alignment strips the
+software half, leaving the panel below 4.8's minimum. **There is no tension.** 2.4 says "for
+every comp-set member" and means it — the tiers decide which *analysis* consumes which
+members, not who gets measured. `panel_members()` now returns the whole set and
+`structural_members()` serves 2.5. The symptom was the giveaway and I described it without
+recognising it: the panel and the comp set are counts of the same set and should not diverge.
+
+### Still open, deliberately
+
+- **`sizing_without_derivation`** is registered and has **no checker**. 2.5a/b market sizing
+  needs a TAM with bottom-up components. The acceptance test asserts this as the one pending
+  rule, so it cannot be quietly forgotten.
+- **ROIC** is absent from the 2.4 panel and prints as `NOT COMPUTED` with its reason: invested
+  capital needs stockholders' equity and `concept_map.yaml` maps none. A plausible ROIC on a
+  wrong denominator would be compared across the panel and believed.
+- **1.4b driver mix and 1.4d contract structure** are judgment fields, so they are inputs to
+  evidence rather than outputs of it. They land when section 3 consumes them, with a schema
+  argued against a real consumer.
+- **`research_cli.py ingest` cannot link chunks to Items.** It segments at step 5/5 but
+  chunking is a separate later step, so `apply_to_chunks` never fires in that flow. Every
+  filer ingested through the CLI and embedded afterwards needs a manual
+  `router.segment_html(doc_id, apply_to_chunks=True)` pass — AVGO's five documents did. The
+  one-line fix belongs in its own commit with its own test, because `chunk_embed` also serves
+  the HK PDF path.
+- **One ORCL document yields no Item headings** the regex can find. Four of five segment and
+  the facts are complete.
+- **The AVGO RV comps re-pull** still has no growth and no profitability column — needed for
+  4.8, not for phase 3.
+
+### Next: Phase 4 — sections 3 and 5
+
+Thesis bridge, archetype logic, risk table, Item 1A YoY diffs (R6), and consistency checks
+C1–C9. The **boilerplate finding** is still unresolved and is Phase 4's first design fork:
+the safe-harbour paragraph outranks real risk disclosure in retrieval, which threatens
+5.7b's Item 1A diff. Candidate remedies are the roadmap reranker or an index-time boilerplate
+classifier; neither is chosen.
 
 ---
 
