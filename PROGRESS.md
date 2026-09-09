@@ -2,11 +2,12 @@
 
 > Cross-session memory. Update before ending any AI session: status, decisions, next steps.
 
-> **The spec is at v1.4** (`docs/Equity_Research_Framework_v1.4.md`). Do not build against v1.0
-> through v1.3 — the 70% terminal-value tier was deleted at v1.1, Class A/B rule classes replaced
+> **The spec is at v1.5** (`docs/Equity_Research_Framework_v1.5.md`). Do not build against v1.0
+> through v1.4 — the 70% terminal-value tier was deleted at v1.1, Class A/B rule classes replaced
 > the "explicit discussion" wording at v1.1, v1.3 generalised the Class A definition to cover
-> prose, and v1.4 stated 6.3 at the periodicity of the draft. The changelog at the top of the
-> spec lists every change.
+> prose, v1.4 stated 6.3 at the periodicity of the draft, and v1.5 admitted series-valued inputs
+> and a closed set of series operations to 6.4. The changelog at the top of the spec lists every
+> change.
 
 ---
 

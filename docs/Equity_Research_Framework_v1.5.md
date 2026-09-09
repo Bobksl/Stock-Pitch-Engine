@@ -1,11 +1,15 @@
-# AI Equity Research Framework — v1.4
+# AI Equity Research Framework — v1.5
 
-**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-08
+**Owner:** Bob Liang  ·  **Status:** Approved for build  ·  **Date:** 2026-09-09
 **Scope:** US-listed equities (SEC EDGAR), position horizon (months–quarters), IT sector first
 **Output:** Polished shareable pitch + auditable Excel valuation model
 **Mode:** Interactive co-pilot, section by section
 
 ## Changelog
+
+**v1.5 — 2026-09-09**
+
+- **§6.4** — derived figures may take **series-valued inputs**, and the closed operation vocabulary gains a closed set of **series operations**. §2.4's peer drawdown analysis is the first thing in the framework that is not expressible as arithmetic over scalars: a peak-to-trough drawdown, a recovery time, a downside capture, a correlation and a beta are each a function of a whole price series, not of two numbers. The three existing routes all fail it — prices are not in XBRL so the figures cannot be facts; `sum / difference / product / ratio / growth` cannot express a drawdown so they cannot be model cells as the vocabulary stood; and storing a computed statistic in an external record would make it a figure recorded rather than recomputed, which is precisely the hole §6.4 exists to close. Widening the vocabulary keeps the guarantee that matters: each operation is a named function reviewable in a diff, there is still no expression language and no `eval`, and every statistic is still **recomputed at verification time** rather than trusted. A series input names a source, an instrument and a date range, so the window a statistic was measured over is visible in the declaration instead of being implied by it.
 
 **v1.4 — 2026-09-08**
 
@@ -509,6 +513,8 @@ Every figure in every output resolves to a declared provenance record. There are
 **Resolution is anchor-based, not search-based.** The draft carries the citation and the verifier checks the cited row. Searching the facts table for a matching value is rejected: many facts share a value, so search produces false positives that resolve successfully while citing the wrong fact. (Settled by measurement in Phase 1.)
 
 **Derived figures are recomputed, never stored.** Recomputation runs in `Decimal` from the cited facts, through a **closed operation vocabulary** — no expression language, no `eval`. Float arithmetic is not acceptable for financial figures.
+
+**Series-valued inputs and series operations.** Some figures are functions of a whole series rather than of two numbers: §2.4's peak-to-trough drawdown, recovery time, downside capture, correlation and beta. A derived figure may therefore take a **series input**, which names a source, an instrument and a date range, and may use an operation from a second closed vocabulary of **series operations**. Both vocabularies are closed and each entry is a named function reviewable in a diff; there is still no expression language and no `eval`. The measurement window lives in the input declaration, so a statistic states the period it was measured over rather than implying it, and the statistic is recomputed at verification time exactly as a scalar derived figure is. Storing such a statistic in an external record instead would record it rather than recompute it, and a wrong drawdown recorded faithfully would verify clean.
 
 **External provenance is deliberately narrow.** It exists only for quantities XBRL cannot answer. The closed vocabulary is:
 
