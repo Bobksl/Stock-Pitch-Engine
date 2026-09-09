@@ -2,9 +2,384 @@
 
 > Cross-session memory. Update before ending any AI session: status, decisions, next steps.
 
-> **The spec is at v1.2** (`docs/Equity_Research_Framework_v1.2.md`). Do not build against v1.0
-> or v1.1 — the 70% terminal-value tier was deleted at v1.1 and Class A/B rule classes replaced
-> the "explicit discussion" wording. The changelog at the top of the spec lists every change.
+> **The spec is at v1.5** (`docs/Equity_Research_Framework_v1.5.md`). Do not build against v1.0
+> through v1.4 — the 70% terminal-value tier was deleted at v1.1, Class A/B rule classes replaced
+> the "explicit discussion" wording at v1.1, v1.3 generalised the Class A definition to cover
+> prose, v1.4 stated 6.3 at the periodicity of the draft, and v1.5 admitted series-valued inputs
+> and a closed set of series operations to 6.4. The changelog at the top of the spec lists every
+> change.
+
+---
+
+## Status: PHASE 3 COMPLETE — sections 1 and 2 ✅ (2026-09-09)
+
+Branch `phase-3-sections` off `main`, 19 commits, **not pushed**. 900 passed, 0 skipped.
+Spec advanced v1.2 → **v1.5**.
+
+**Exit criterion met.** Both halves.
+
+```bash
+python scripts/draft_pitch.py AVGO --sections 1,2 --qc
+```
+```
+102 numeric claim(s) checked, 102 resolved
+
+QC PASSED
+
+EXHIBITS: 5 panel members, 2 excluded, 2 stress window(s)
+```
+
+Unlike phase 2 there was no published answer to reproduce, so the criterion tests
+**verifiability** — every figure resolves, from the latest filed period, with all five
+1.5 / 2.6 exhibits present — and **detection**, each new rule having a degraded draft that
+trips exactly it. `tests/test_phase3_exit_criterion.py` asserts all four clauses in one
+place; every other test still scopes to the rules it is about.
+
+The generated Section 2 panel, every figure content-addressed and recomputed at
+verification time:
+
+```
+| Member | Revenue share | Growth | Gross | EBIT  | R&D   | Capex |
+| AMD    |  8.88         | 34.34  | 49.52 | 10.66 | 23.36 | 2.81  |
+| AVGO   | 16.37         | 23.87  | 67.77 | 39.89 | 17.18 | 0.98  |
+| IBM    | 17.31         |  7.62  | 58.19 |  n/a  | 12.31 | 1.62  |
+| MRVL   |  2.10         | 42.09  | 51.02 | 16.14 | 25.32 | 4.32  |
+| NVDA   | 55.34         | 65.47  | 71.07 | 60.38 |  8.57 | 2.80  |
+| ORCL   | EXCLUDED | fiscal year 2025-06-01..2026-05-31 does not align (§2.4) |
+| QCOM   | EXCLUDED | fiscal year 2024-09-30..2025-09-28 does not align (§2.4) |
+```
+
+**Phase numbering settled.** The audit's build sequence and the README's phase table
+disagreed. The audit wins - it is the more specific document and its sequencing rationale is
+explicit - so phase 3 is *sections 1 and 2*, phase 4 is *sections 3 and 5*, phase 5 is
+assembly. The README table was the bug and is fixed.
+
+**Exit criterion proposed and accepted.** One command, and unlike phase 2 there is no
+published answer to reproduce, so it tests verifiability and detection rather than agreement
+with a target:
+
+```bash
+python scripts/draft_pitch.py AVGO --sections 1,2 --qc     # exit 0
+```
+
+1. every figure resolves to a fact / model / ext anchor (C10), from the latest filed period
+   (C12), and all five required 1.5 / 2.6 exhibits are present - the non-vacuity clause,
+   without which a draft carrying no figures passes;
+2. the 1.4h type field is computed from the segment panel and hand-checks against AVGO's
+   FY2025 10-K segment footnote;
+3. the industry panel spans one calendar period across at least 5 peers with at least one
+   off-cycle peer excluded **and named** - AVGO's October fiscal year end against
+   December-FYE peers makes that path execute on the live case rather than a contrived one;
+4. every new 1.6 / 2.7 rule has a degraded draft in `tests/fixtures/` tripping exactly that
+   rule and nothing else. This is the phase-3 analogue of phase 1's corruption test, and the
+   falsifiable core of the criterion.
+
+### Spec amendments made this phase (v1.2 -> v1.3)
+- **6.5** - Class A generalised from "the figure is wrong or unverifiable" to any assertion
+  wrong, unverifiable, or prohibited. Phase 3 is the first phase generating prose, and a
+  banned marketing adjective is neither a figure nor a question of model shape. **The test
+  that decides the class is now stated once:** if no reason in the closed exception
+  vocabulary could ever excuse a breach, the rule is Class A. Class B for such a rule is an
+  exception path that can never be used honestly, which is worse than no path.
+- **6.4** - `filing_text_disclosure` added to the external vocabulary. Roughly half the
+  section 7 taxonomy (book-to-bill, ARR, NRR, ASP, unit volume, design wins) is disclosed in
+  prose and never tagged, so XBRL cannot answer it and it qualifies on the class's own test.
+  Three classes still, no fourth. The record cites a chunk id and character offset and the
+  verifier asserts the numeral appears **literally** in that chunk - without exact
+  containment this entry would make retrieval the source of a figure and breach P2.
+- **1.6** - the "so what" test becomes a Measurement. An LLM judgment inside the gate means
+  the same draft passes on one run and fails on the next, destroying the single passing
+  state, and makes the LLM the last check on its own output.
+- **2.7** - three of its five conditions become construction-time invariants. A Section 2
+  that will not build without a structural conclusion cannot present that defect to the gate.
+
+### Decisions taken this phase (approved before coding)
+- **`src/pitch/`, not `src/sections/`.** The latter already means Item-anchored segmentation
+  of a *filing*. These are sections of the *pitch*. Approved deviation from the handover.
+- **Five new rules, all Class A** - `banned_language`, `unsupported_qualitative_claim`,
+  `segment_profit_missing`, `sizing_without_derivation`, `comp_set_not_type_justified`. The
+  last one overturns the handover's "arguably Class B": it is C1, and no exception reason
+  touches it.
+- **Price history: a local `prices` table with a gitignored loader** (fork 1, option A). The
+  schema is public and reviewable, the data never enters git, and drawdown statistics become
+  *derived* figures rather than declared scalars. Needs one extension to `external.py`: a
+  record kind pointing at a table and key rather than carrying a value, since a five-year
+  series is not a scalar and `ExternalRecord` is. Not built yet.
+- **Period alignment: exclude and name** (fork 2). `calendar_period()` returns None outside
+  tolerance and the peer leaves that column by name; never mapped to the nearest year. The
+  SEC `frames` tolerance constant is to be read from SEC documentation and cited in code -
+  **not** guessed, and **not** `ANNUAL_MIN_DAYS/MAX_DAYS`, which is a duration filter
+  answering a different question.
+- **The type field gets three verdicts, not two** (see below). Contested threshold 10pp.
+
+### The finding that changed the exit criterion
+AVGO was not ingested; it is now (5 filings, **0 reconciliation mismatches**, and its segment
+revenue reproduces the Bloomberg DES export to the dollar - 36,858 / 27,029 against
+36.86B / 27.03B).
+
+And its FY2025 type field does **not** disagree. Revenue splits 57.69 / 42.31 to
+Semiconductor Solutions and profit splits **50.56 / 49.44** the same way, so the two
+dominances agree and a binary argmax test passes it silently. That agreement is worth 467m
+out of 42bn, against segment margins of 57.60% and 76.82%. Answering "semiconductor company"
+there hands section 2 the semiconductor comp set while half the profit is enterprise
+software earning a software margin - the exact failure 1.4h exists to prevent, arriving
+through a near-tie instead of a flip.
+
+So `contested` is a verdict of its own: top two profit shares within 10pp. AMD FY2025 lands
+at 9.71pp and would also have passed a binary test. The 10pp is a judgement call and is
+stated once in `src/pitch/types.py`.
+
+### Built (P3.0-P3.1)
+`src/pitch/types.py` - `TypeField`, `SegmentShare`, `ExcludedMember`. Every dominance is a
+property over `shares`, and `shares` is built only by `from_panel` out of `Fact` objects, so
+there is no path that *asserts* a type field. Refuses a revenue-bearing segment with no
+segment profit (1.3), and refuses a panel whose segments do not sum to a profit.
+
+1.4b (driver mix) and 1.4d (contract structure) are deliberately absent: no consumer until
+section 1 assembly, and building them now would be speculative.
+
+### Hard-won this phase
+- **Filers tag non-segments on the segment axis.** AVGO tags unallocated expenses there with
+  zero revenue and -6,069m of profit in FY2022 and FY2021. Counted as a segment it corrupts
+  the profit denominator and can win the argmax outright. Excluded structurally - a member
+  with no revenue is not a business segment - and **named** in `excluded`, never dropped
+  silently.
+- **Segment profit does not reconcile to consolidated operating income**, and must not be
+  expected to. AVGO FY2025: segments sum to 41,997m against a consolidated 25,484m, because
+  ASC 280 segment profit excludes unallocated amortisation and SBC. `SegmentPanel.reconciles()`
+  returns True for revenue and False for operating income on a perfectly correct filing, so a
+  gate applying the revenue reconciliation to profit would fire on every name.
+- **Quantise last.** AMD FY2023: 0.5452282 - 0.2628631 = 0.2823651 -> 0.2824, where rounding
+  the shares first and subtracting gives 0.2823. One ulp, irrelevant there, decisive at a
+  threshold. A test asserts only that.
+- **`pretty_member` renders the qname, so the qname has to be right.** AMD tags
+  `amd:DatacenterMember`, not `DataCenterMember`; the latter renders "Data Center" and the
+  test fixture silently stops matching the live data it claims to mirror.
+- The em-dash joins U+2212 on the GBK console list. `render()` uses ASCII hyphens.
+
+### The corpus is now nine filers, chosen for the contested type field (P3.4c)
+
+AVGO's type field is `contested`, so `requires_both_types` is True and a
+semiconductor-only comp set is precisely what `comp_set_not_type_justified`
+blocks. Ingested accordingly, five 10-K years each, all reconciled against
+`companyfacts` with zero mismatches:
+
+- **semiconductors** — MRVL (custom silicon and networking for the same
+  hyperscaler buyers; the closest direct competitor AVGO has), QCOM, plus the
+  already-loaded NVDA and AMD
+- **infrastructure software** — ORCL and IBM, both running the
+  acquire-and-harvest model VMware and CA economics actually resemble, plus the
+  already-loaded MSFT
+
+Second reason the set earns its ingest cost: **seven distinct fiscal calendars
+across nine filers** — QCOM 09-28, AAPL 09-27, AVGO 11-02, AMD 12-27, IBM
+12-31, NVDA 01-25, MRVL 01-31, ORCL 05-31, MSFT 06-30. P3.5 period alignment
+gets a live stress test rather than a contrived one.
+
+### Fork 1 resolved differently: moomoo, not a Bloomberg CSV
+
+`schema_prices.sql` + `src/ingest/prices.py`. Prices come from moomoo through
+the OpenD gateway the owner already runs. Better than the approved CSV route on
+the constraint that mattered: **there is no export file to keep out of git,
+because nothing is written to disk at all.** 10 tickers x 1,259 daily bars,
+identical date ranges, benchmark (SPY) included.
+
+- **No float is ever constructed.** `json.loads(parse_float=Decimal)` builds the
+  value from the vendor's own source text, so `money.py` still has exactly TWO
+  sanctioned crossings and this is not a third. Column is NUMERIC.
+- **Adjustment is part of the primary key.** A drawdown across a split boundary
+  on raw prices is wrong by the split ratio — AVGO's 10:1 would read as a 90%
+  crash — so raw and forward-adjusted cannot share a key.
+- The SDK lives in a different interpreter (`MOOMOO_PYTHON`, default
+  `C:\Python314\python.exe`) and the boundary is JSON over stdout. A market-data
+  client has no business in the venv that parses filings, and the boundary is
+  what makes the loader testable without a gateway.
+- **Operational limit:** moomoo's history quota is 100 distinct securities per
+  user, one slot per new ticker. 10 used. Ample for comp sets, not for
+  exploratory pulls.
+
+moomoo also proposes comp sets: `get_owner_plate US.AVGO` gives
+`US.LIST2015 Semiconductors [INDUSTRY]`, and `US.LIST2508 Software -
+Infrastructure` exists separately — which is what a contested type field needs.
+It cannot ingest filings; EDGAR remains the only fact source (P2), and its
+`get_financials_revenue_breakdown` is a vendor normalisation, admissible at most
+as a second reconciliation oracle alongside `companyfacts`, never as a fact.
+
+### Three Phase 0 defects the peer ingest surfaced
+
+1. **Item 8 by cross-reference was rejected.** `sections/us.py` required every
+   Item in `REQUIRED` to exceed `MIN_SECTION_CHARS`. QCOM FY2022-25 satisfy Item
+   8 by pointing at an F-page appendix in 152 characters; their own FY2021
+   writes the same pointer in 363 and passed only because it was wordier. A rule
+   whose outcome turns on the verbosity of a pointer measures nothing. Item 8
+   must still ANCHOR; it is exempt from the length check alone (`THIN_ALLOWED`),
+   and a thin Item 1 still fails.
+2. **`ixt:zerodash` was unparseable.** ORCL FY2022 and FY2023 print em dashes
+   under it — 112 and 134 facts, every one a real zero — and the whole filing
+   failed to parse. `parse_number` already intended a dash to mean zero; it only
+   knew the ASCII one. Same family as U+2212 on a GBK console: right intent,
+   too narrow a character set. Now `DASHES` covers the Unicode dash family and
+   `ZERO_RULES` covers `zerodash` / `nocontent`.
+3. **Not fixed, recorded:** one ORCL document yields no Item headings the regex
+   can find. Four of five segment, facts are complete, four years is enough for
+   a panel. A third parser fix in one sitting is not the best use of the phase.
+
+### Segment revenue does not always add up, and the suite caught it
+
+QCOM's segment revenue does not sum to its consolidated total: it tags
+QCT / QTL / QSI on the segment axis and leaves nonreportable-segment revenue
+untagged, with `us-gaap:AllOtherSegmentsMember` carrying profit and no revenue.
+ASC 280 does not require otherwise, so the breakdown is **complete as filed and
+still does not add up**.
+
+`test_every_filer_year_reconciles` asserted that segment revenue always sums.
+That was written when the corpus was four filers which all happened to tag
+segments completely, and it is not a property of 10-Ks. It is now a declared
+`NON_RECONCILING` list asserting BOTH directions: an unlisted filer that stops
+reconciling fails, and a listed filer that starts reconciling fails as stale.
+Same discipline as exception expiry in 6.5 — the list cannot rot into a
+carve-out.
+
+QCOM also reports segment profit as **EBT**, not `OperatingIncomeLoss`.
+Deliberately NOT mapped through `concept_map` overrides: EBT is not operating
+income, and mixing the two across a panel is the `comp_definitions_inconsistent`
+Class A failure. **QCOM is a consolidated-panel peer, not a segment-exhibit one.**
+
+### Retrieval: the quota, measured against a set that can measure it
+
+The labelled set had 4 corpus-wide questions and 2 with gold in more than one
+filer, which cannot evaluate a panel retriever. Now 9 and 7. Over those 7:
+
+| quota | distinct filers | hit@10 | recall@10 | MRR |
+|---|---|---|---|---|
+| none | 2.6 | 100.0% | 75.0% | 0.929 |
+| 2 | 5.4 | 100.0% | 78.6% | 0.929 |
+
+The quota **doubles panel breadth at no cost to hit rate**. An earlier reading
+showed hit@10 falling 93.2% -> 81.8%; that ran over all 44 questions, 40 of
+which set a ticker filter, so it measured the cost of capping the single company
+the question asked about. Given a question set shaped like the thing being
+measured, the trade-off disappears.
+
+Three candidate questions were probed and **dropped** rather than labelled
+optimistically (customer concentration is not cross-company however worded;
+China concentration duplicates export controls; engineering talent retrieves
+competition passages and the human-capital text was never confirmed present).
+
+**Do not compare retrieval scores across question-set versions.** The headline
+moved from hit@5 88.6% / MRR 0.820 to 89.8% / 0.828 purely because the
+denominator went from 44 questions to 49.
+
+### Built (P3.2 – P3.8)
+
+`src/pitch/` is the pitch layer, deliberately separate from `src/sections/`, which already
+means Item-anchored segmentation of a *filing*.
+
+- **`types.py`** — 1.4h `TypeField`, three verdicts (see the near-tie finding above)
+- **`kpi.py`** + `config/kpi_taxonomy.yaml` — the section 7 taxonomy, 44 entries. Derived
+  KPIs are model cells recomputed at verification time; 27 of 44 are `filing_text`
+- **`draft.py`** — slot rendering. The LLM writes prose with named slots and no numerals; a
+  numeral surviving in a template is `llm_computed_arithmetic`. Markers are
+  **content-addressed** (6.4), which the hand-written phase-1 fixtures are not
+- **`overview.py`** — Section 1 evidence and its three 1.5 exhibits
+- **`panel.py`** — 2.4 period alignment; **`industry.py`** — the 2.4 panel
+- **`drawdown.py`** — 2.4 / 2.5i peer drawdown, windows derived from the benchmark
+- **`compset.py`** — 2.3 two-tier comp set; **`primer.py`** — 2.8 versioned primer
+- **`section2.py`** — Section 2 evidence and its three 2.6 exhibits
+- `src/qc/prose_rules.py`, `src/ingest/prices.py`, `schema_prices.sql`,
+  `scripts/draft_pitch.py`, `config/comp_sets/avgo.yaml`
+
+### Spec amendments (v1.2 → v1.5)
+
+- **v1.3** — 6.5 Class A generalised from "the figure is wrong" to cover prose;
+  `filing_text_disclosure` added to 6.4's vocabulary; 1.6's "so what" test became a
+  Measurement; three of 2.7's five conditions became construction-time invariants
+- **v1.4** — 6.3 stated at the **periodicity of the draft**
+- **v1.5** — 6.4 admits **series-valued inputs** and a closed set of series operations
+
+### Period alignment: SEC answers one question of the two
+
+"Is this an annual period?" is SEC's, documented and cited: an annual frame is **365 days
+± 30**. "Which calendar year is it?" is **not** — the documentation says only "the dates that
+best align", and publishes no assignment tolerance. Inventing one and attributing it to SEC
+would have been worse than owning it, so the measure is stated in `src/pitch/panel.py`: days
+of the fiscal period falling inside the calendar year.
+
+The floor is 300/365 and it is **not knife-edge** — every value from 272 to 306 selects the
+same five members, because the corpus has a real gap between Broadcom at 306 and Qualcomm at
+271. Three constants must never be confused and the module says so: SEC's
+`ANNUAL_TOLERANCE_DAYS` (is it a year), this project's `DEFAULT_MIN_OVERLAP_DAYS` (which
+year), and `facts/api.ANNUAL_MIN_DAYS/MAX_DAYS` (which rows to fetch).
+
+### Findings that changed the code
+
+**A drawdown could not be a derived figure, and all three routes failed it.** Prices are not
+in XBRL so it cannot be a fact; `sum/difference/product/ratio/growth` cannot express a
+drawdown; and an external record carries a *value*, so putting a statistic there records it
+rather than recomputing it — and a wrong drawdown recorded faithfully verifies clean, which
+is the hole 6.4 exists to close. v1.5 widens the vocabulary instead. `SERIES_OPS` is kept
+**separate** from `OPS` and the two refuse to mix in both directions.
+
+**`recovery_days` needs two series, and one-series readings both looked plausible.** Bounded
+at the benchmark's recovery, AMD and MRVL read as never recovering from 2022 when they took
+459 and 671 days. Handed one extended slice, the op recomputed a different peak and trough
+and answered about a *different* drawdown — Broadcom moved from 215 days to 59, silently
+measuring the 2025 fall. The window defines which drawdown; a second, longer series is
+searched forward for the recovery.
+
+**`claims.py` could not declare a multiple or a count of days.** A downside capture of 0.42
+under a column headed `(x)` was `scale_undeclared` — correctly, since nothing had declared
+what it was. Added `(x)`, `(days)` and `(ratio)` headers plus inline `x` / `days`, which is
+what lets a KPI snapshot hold percentages and inventory days in one column. Widening what
+*can* be declared; never guessing.
+
+**A cell's `unit` is provenance and its `display` is presentation.** Conflating them
+multiplied a downside capture of 2.52 by a hundred and wrote 252.26 under a column headed
+`(x)`.
+
+**Metadata numerals are still figures.** The benchmark's own drawdown written into a caption,
+and a day count in an exclusion reason, are both unanchored numerals and the gate blocks
+them. The benchmark drawdown became a cell; an excluded peer is now named by its **fiscal
+dates**, which `claims.py` masks, with the arithmetic kept in the CLI output.
+
+### A misreading of mine, corrected
+
+I reported a framework tension: that 1.4h demands both types while 2.4's alignment strips the
+software half, leaving the panel below 4.8's minimum. **There is no tension.** 2.4 says "for
+every comp-set member" and means it — the tiers decide which *analysis* consumes which
+members, not who gets measured. `panel_members()` now returns the whole set and
+`structural_members()` serves 2.5. The symptom was the giveaway and I described it without
+recognising it: the panel and the comp set are counts of the same set and should not diverge.
+
+### Still open, deliberately
+
+- **`sizing_without_derivation`** is registered and has **no checker**. 2.5a/b market sizing
+  needs a TAM with bottom-up components. The acceptance test asserts this as the one pending
+  rule, so it cannot be quietly forgotten.
+- **ROIC** is absent from the 2.4 panel and prints as `NOT COMPUTED` with its reason: invested
+  capital needs stockholders' equity and `concept_map.yaml` maps none. A plausible ROIC on a
+  wrong denominator would be compared across the panel and believed.
+- **1.4b driver mix and 1.4d contract structure** are judgment fields, so they are inputs to
+  evidence rather than outputs of it. They land when section 3 consumes them, with a schema
+  argued against a real consumer.
+- **`research_cli.py ingest` cannot link chunks to Items.** It segments at step 5/5 but
+  chunking is a separate later step, so `apply_to_chunks` never fires in that flow. Every
+  filer ingested through the CLI and embedded afterwards needs a manual
+  `router.segment_html(doc_id, apply_to_chunks=True)` pass — AVGO's five documents did. The
+  one-line fix belongs in its own commit with its own test, because `chunk_embed` also serves
+  the HK PDF path.
+- **One ORCL document yields no Item headings** the regex can find. Four of five segment and
+  the facts are complete.
+- **The AVGO RV comps re-pull** still has no growth and no profitability column — needed for
+  4.8, not for phase 3.
+
+### Next: Phase 4 — sections 3 and 5
+
+Thesis bridge, archetype logic, risk table, Item 1A YoY diffs (R6), and consistency checks
+C1–C9. The **boilerplate finding** is still unresolved and is Phase 4's first design fork:
+the safe-harbour paragraph outranks real risk disclosure in retrieval, which threatens
+5.7b's Item 1A diff. Candidate remedies are the roadmap reranker or an index-time boilerplate
+classifier; neither is chosen.
 
 ---
 

@@ -171,3 +171,81 @@ def test_series_key_identifies_a_series_by_concept_entity_and_slice():
 
 def test_no_series_status_is_named():
     assert NO_SERIES == "no_series"
+
+
+# ---------------------------------------------------------------------------
+# Periodicity: an instant is compared at an annual reporting date (6.3, v1.4)
+# ---------------------------------------------------------------------------
+
+AVGO = 1730168
+AVGO_FY2025, AVGO_FY2024 = date(2025, 11, 2), date(2024, 11, 3)
+
+_RPO_DRAFT = """RPO stands at $33,300 million [^F1] against $20,500 million [^F2].
+
+## Citation index
+
+```yaml
+F1: {kind: fact, cik: 1730168, concept: remaining_performance_obligation,
+     period_end: 2025-11-02}
+F2: {kind: fact, cik: 1730168, concept: remaining_performance_obligation,
+     period_end: 2024-11-03}
+```
+"""
+
+
+def avgo_loaded() -> bool:
+    try:
+        from src.facts.api import get_fact
+        return get_fact(AVGO, "revenue", AVGO_FY2025) is not None
+    except Exception:
+        return False
+
+
+avgo = pytest.mark.skipif(not avgo_loaded(), reason="AVGO facts not loaded")
+
+
+@avgo
+def test_the_newest_instant_on_record_is_a_quarter_end():
+    """The premise. If this ever stops holding, the rule below is untested."""
+    from src.facts.api import get_series
+    newest = get_series(AVGO, "remaining_performance_obligation", years=1)[0]
+    assert newest.period_end > AVGO_FY2025, (
+        "companyfacts should be carrying a later interim balance")
+
+
+@avgo
+def test_an_instant_at_the_fiscal_year_end_is_not_stale():
+    """6.3 at the periodicity of the draft: an annual section quotes the
+    annual balance, and the filer's later interim balance does not make it
+    old. Before v1.4 this failed, and the only way to satisfy the rule was to
+    put a Q2 balance in an annual overview."""
+    report = verify_draft(_RPO_DRAFT)
+    assert [f for f in report.recency if f.status == STALE] == []
+
+
+@avgo
+def test_the_annual_dates_come_from_the_filers_own_annual_filings():
+    from src.qc.recency import _annual_period_ends
+    ends = _annual_period_ends(AVGO, None)
+    assert {AVGO_FY2025, AVGO_FY2024} <= ends
+    assert all(e.month in (10, 11) for e in ends), (
+        "Broadcom's fiscal year ends near the start of November")
+
+
+@avgo
+def test_a_duration_concept_is_unaffected():
+    """Durations were already correct; the fix must not move them."""
+    from src.qc.recency import SeriesKey, _latest_available
+    key = SeriesKey(cik=AVGO, concept="revenue", segments=())
+    assert _latest_available(key, None) == AVGO_FY2025
+
+
+@avgo
+def test_an_instant_quoted_at_a_stale_year_end_still_fails():
+    """The rule must not have been widened into never firing on instants."""
+    md = _RPO_DRAFT.replace(
+        "F1: {kind: fact, cik: 1730168, concept: remaining_performance_obligation,\n"
+        "     period_end: 2025-11-02}\n", "")
+    md = md.replace("$33,300 million [^F1] against ", "")
+    report = verify_draft(md)
+    assert [f for f in report.recency if f.status == STALE]

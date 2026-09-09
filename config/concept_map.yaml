@@ -133,6 +133,30 @@ concepts:
       - us-gaap:LongTermDebtNoncurrent
       - us-gaap:LongTermDebt
 
+  # Added for the section 7 KPI taxonomy. Both are instants: a balance at the
+  # period end, not a flow through it. Verified present in the ingested filings
+  # before being added here -- InventoryNet across five filers, the RPO tag
+  # across four -- rather than taken from the taxonomy on faith.
+  inventory:
+    label: Inventory, net
+    unit: USD
+    period_type: instant
+    tags:
+      - us-gaap:InventoryNet
+    # Deliberately NOT the raw-materials / WIP / finished-goods components, which
+    # every one of these filers also tags. Summing them is a different number
+    # from InventoryNet whenever a reserve sits between them.
+
+  remaining_performance_obligation:
+    label: Remaining performance obligation (RPO)
+    unit: USD
+    period_type: instant
+    tags:
+      - us-gaap:RevenueRemainingPerformanceObligation
+    # The current portion (cRPO) is tagged with a duration qualifier the filers
+    # express differently -- AMD uses an extension tag -- so cRPO is not a
+    # default concept. Add it per filer under `overrides` when a pitch needs it.
+
   diluted_shares:
     label: Diluted weighted-average shares
     unit: shares

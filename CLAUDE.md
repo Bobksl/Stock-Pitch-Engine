@@ -7,9 +7,9 @@ Excel model out. The deterministic QC gate is the product; the RAG is a componen
 
 Several files in this repository claim authority and they do not agree. In order:
 
-1. **`docs/Equity_Research_Framework_v1.2.md`** — the spec. Wins over everything, including
-   this file. Check the version header; v1.0 and v1.1 are superseded and their changelogs
-   say what changed. Do not build against them.
+1. **`docs/Equity_Research_Framework_v1.5.md`** — the spec. Wins over everything, including
+   this file. Check the version header; v1.0 through v1.4 are superseded and their
+   changelogs say what changed. Do not build against them.
 2. **`docs/Workflow_Audit_v1.0.md`** — architecture, data lineage, and the eight findings
    the valuation engine is tested against. **Not re-versioned:** it still describes the v1.0
    provenance model in §3 and §5. Where audit and spec disagree, the spec wins.

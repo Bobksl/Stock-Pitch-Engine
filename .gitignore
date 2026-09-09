@@ -41,3 +41,6 @@ ECFC*.xlsx
 exports/
 *.xlsx.tmp
 ~$*.xlsx
+
+# A one-off backfill run against an already-migrated database.
+scripts/backfill_end_page.py

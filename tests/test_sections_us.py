@@ -220,3 +220,44 @@ def test_nvda_item_8_is_a_pointer_to_item_15():
     lengths = dict(rows)
     assert lengths["item_8"] < 500
     assert lengths["item_15"] > 50_000
+
+
+# ---------------------------------------------------------------------------
+# Item 8 by cross-reference (P3.4c)
+# ---------------------------------------------------------------------------
+
+CROSS_REF = ("The information required by this item is included in this "
+             "Annual Report on pages F-1 through F-27.")
+
+
+def test_item_8_may_be_satisfied_by_a_cross_reference():
+    """Real 10-Ks point Item 8 at an F-page appendix outside the Item structure.
+
+    Qualcomm FY2022-FY2025 write exactly the string below, in 152 characters,
+    and their own FY2021 writes the same pointer in 363 and passed only because
+    it was wordier. A rule whose outcome turns on the verbosity of a pointer is
+    not measuring anything. Nothing upstream reads Item 8 prose: figures come
+    from the inline-XBRL instance (P2), and 1.2 / 2.2 take narrative from Items
+    1, 1A and 7.
+    """
+    body = [(h, CROSS_REF if h.startswith("Item 8") else t)
+            for h, t in BODY_SECTIONS]
+    sections = {s.item: s for s in segment_text(make_10k(body))}
+    assert sections["8"].length < 200
+    assert set(sections) >= {"1", "1A", "7", "7A", "8"}
+
+
+def test_item_8_must_still_be_present():
+    """Exempt from the length check, not from the required list: a missing
+    Item 8 anchor still means the anchors are wrong."""
+    body = [b for b in BODY_SECTIONS if not b[0].startswith("Item 8")]
+    with pytest.raises(SegmentationError, match="required Items missing"):
+        segment_text(make_10k(body))
+
+
+def test_the_exemption_is_item_8_only():
+    """A near-empty business description is still a build error."""
+    body = [(h, "See above." if h.startswith("Item 1.") else t)
+            for h, t in BODY_SECTIONS]
+    with pytest.raises(SegmentationError, match="near-empty"):
+        segment_text(make_10k(body))

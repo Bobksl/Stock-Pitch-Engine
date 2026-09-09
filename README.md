@@ -111,12 +111,14 @@ independent reconciliation oracle, and disagreement is a hard failure.
 | 0 — data foundation | Facts table, EDGAR client, inline-XBRL parser, Item-anchored segmentation | ✅ merged |
 | 1 — verification | Numeric claim extraction, anchor-based resolution, provenance classes, eval harness | ✅ merged |
 | 2 — valuation | WACC, beta, DCF, reverse DCF, comps, price target, scenarios, Excel export + reconciliation | ✅ complete |
-| 3 — narrative | Section drafting against the verified figures | planned |
-| 4 — assembly | Full pitch assembly, risks, monitoring | planned |
+| 3 — sections 1 and 2 | Company and industry overviews: KPI taxonomy, industry panel, peer drawdown, primer cache | ✅ complete |
+| 4 — sections 3 and 5 | Thesis bridge, archetype logic, risk table, Item 1A diffs, consistency checks C1–C9 | planned |
+| 5 — assembly | Document generation, QC report, monitoring handoff | planned |
 
-**566 passing tests.** 10,473 consolidated facts cross-checked against SEC `companyfacts` with **0
-mismatches**. Retrieval baseline measured, not assumed: **hit@5 88.6%, MRR 0.820** over 44
-labelled questions.
+**900 passing tests.** Nine US filers, five 10-K years each, cross-checked against SEC
+`companyfacts` with **0 mismatches**. Retrieval measured, not assumed: **hit@5 89.8%, MRR
+0.828** over 49 labelled questions — and scores are only comparable within one version of
+that question set.
 
 ## Quickstart
 
@@ -205,8 +207,13 @@ src/
 
 ## Known limitations
 
-- **Narrative generation is not built yet.** Phases 3 and 4 are planned; today the pipeline
-  verifies, values and audits, and does not draft a full pitch.
+- **Only sections 1 and 2 are drafted.** Phases 4 and 5 are planned, so the pipeline does
+  not yet produce a thesis, a risk table or an assembled pitch.
+- **Market sizing has no checker.** `sizing_without_derivation` is a registered Class A rule
+  with nothing implementing it; §2.5a/b needs a TAM with bottom-up components first.
+- **ROIC is absent from the industry panel.** Invested capital needs stockholders' equity,
+  which the concept map does not carry, and a ROIC on a wrong denominator would be compared
+  across the panel and believed. It prints as `NOT COMPUTED` with the reason.
 - **Boilerplate dominates risk retrieval** (war story 7). Candidate remedies are a reranker
   or an index-time boilerplate classifier; neither is chosen.
 - **The comp-set minimum of five is a judgement call.** The framework requires a minimum and

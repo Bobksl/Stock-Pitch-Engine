@@ -25,17 +25,47 @@ rather than against today's table.
 Only fact-anchored claims participate. A model cell's periods live in its
 inputs, and an external record carries its own as-of date and is governed by the
 source's release calendar rather than by EDGAR's.
+
+Periodicity, and why instants needed stating separately (spec 6.3, v1.4)
+------------------------------------------------------------------------
+"Latest available" is measured at the periodicity the draft is written at. For
+a DURATION concept that already held without anyone writing it down, because
+`get_series` filters durations to annual lengths, so the latest revenue is the
+latest fiscal year rather than the latest quarter.
+
+Instants had no such filter, and the asymmetry was invisible until a draft
+first cited one. `companyfacts` carries every balance the filer has published,
+so the newest inventory or RPO instant is a recent QUARTER end. Measured
+against that, Broadcom's FY2025 remaining performance obligation is stale --
+and the only way to satisfy the rule would be to quote the Q2-2026 balance
+inside an annual overview, mixing periods rather than refreshing them. That is
+the cross-sectional corruption 2.4 forbids, arriving down the time axis instead
+of across peers.
+
+So an instant is compared against the latest instant at an ANNUAL REPORTING
+DATE, taken from the filer's own annual filings rather than inferred from the
+shape of the dates.
 """
 from dataclasses import dataclass, field
 from datetime import date
 
+from src.db import get_conn
 from src.facts.api import get_series
+from src.facts.concepts import ConceptError, concept
 from src.qc.anchors import KIND_FACT, Anchor
 from src.qc.claims import NumericClaim
 from src.qc.resolve import Resolution
 
 STALE = "stale_period"
 NO_SERIES = "no_series"
+
+#: Forms whose period_end is an annual reporting date. A balance-sheet instant
+#: in an annual draft is quoted at one of these.
+ANNUAL_FORMS = ("10-K", "10-K/A", "10-KT", "20-F", "40-F")
+
+#: get_series slices to `years`; instants carry no annual filter, so ask for
+#: enough history that the annual dates among them are certain to be included.
+_INSTANT_LOOKBACK = 1000
 
 
 @dataclass(frozen=True)
@@ -72,11 +102,54 @@ class SeriesFinding:
         return self.status == "ok"
 
 
+def _is_instant(concept_name: str, cik: int) -> bool:
+    try:
+        return concept(concept_name, cik).period_type == "instant"
+    except (ConceptError, KeyError):
+        return False
+
+
+def _annual_period_ends(cik: int, as_of: date | None) -> set[date]:
+    """The filer's own annual reporting dates, from its annual filings.
+
+    Read from `filings` rather than inferred from the dates themselves: a
+    fiscal year ending on the Sunday nearest 31 October moves by a few days
+    each year, and any rule guessing which instants are "annual-looking" would
+    have to encode that. The filer already told us, once per 10-K.
+    """
+    sql = ("SELECT DISTINCT period_end FROM filings "
+           "WHERE cik = %(cik)s AND form = ANY(%(forms)s) "
+           "AND period_end IS NOT NULL")
+    params: dict = {"cik": cik, "forms": list(ANNUAL_FORMS)}
+    if as_of:
+        sql += " AND filed_date <= %(as_of)s"
+        params["as_of"] = as_of
+    with get_conn() as conn:
+        return {row[0] for row in conn.execute(sql, params).fetchall()}
+
+
 def _latest_available(key: SeriesKey, as_of: date | None) -> date | None:
-    """The most recent period the facts table can answer for this series."""
+    """The most recent period the facts table can answer, at the draft's periodicity.
+
+    Spec 6.3 (v1.4). For a duration the facts API has already restricted the
+    series to annual lengths. For an instant it has not, so the annual dates
+    are applied here; if the filer has no annual filing on record the plain
+    latest stands, because inventing a periodicity would be worse than
+    reporting the newest thing we have.
+    """
     segments = dict(key.segments) if key.segments else {}
-    series = get_series(key.cik, key.concept, years=1, segments=segments, as_of=as_of)
-    return series[0].period_end if series else None
+    if not _is_instant(key.concept, key.cik):
+        series = get_series(key.cik, key.concept, years=1, segments=segments,
+                            as_of=as_of)
+        return series[0].period_end if series else None
+
+    series = get_series(key.cik, key.concept, years=_INSTANT_LOOKBACK,
+                        segments=segments, as_of=as_of)
+    if not series:
+        return None
+    annual = _annual_period_ends(key.cik, as_of)
+    at_year_end = [f.period_end for f in series if f.period_end in annual]
+    return max(at_year_end) if at_year_end else series[0].period_end
 
 
 def check_recency(resolutions: list[Resolution], index: dict[str, Anchor], *,

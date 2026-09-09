@@ -315,15 +315,48 @@ def test_latest_vintage_keeps_every_period():
     assert len(api.latest_vintage([older, other_period])) == 2
 
 
+#: Filers whose segment revenue legitimately does NOT sum to the consolidated
+#: total, and why. Not a waiver list: each entry names a disclosure fact, and
+#: the test asserts the filer really does still fail to reconcile, so an entry
+#: that goes stale fails rather than quietly excusing a later regression.
+#:
+#: This list started empty and was believed unnecessary. "Segment revenue adds
+#: up" was written as a property of 10-Ks when the corpus was four filers that
+#: all happened to tag segments completely. It is not one.
+NON_RECONCILING = {
+    804328: (
+        "QCOM tags QCT / QTL / QSI on the segment axis and leaves nonreportable "
+        "segment revenue untagged -- us-gaap:AllOtherSegmentsMember carries "
+        "segment profit and no revenue at all. ASC 280 does not require the "
+        "filer to tag it, so the breakdown is complete as filed and still does "
+        "not sum. QCOM is usable for the consolidated 2.4 industry panel and "
+        "NOT for a 1.5 segment-level exhibit."),
+}
+
+
 @pytest.mark.skipif(not _nvda_loaded(), reason="NVDA facts not loaded")
 def test_every_filer_year_reconciles():
-    """Segment revenue must add up to the consolidated total, all filers, all years."""
+    """Segment revenue adds up to the consolidated total, or the filer is a
+    declared exception that is still true."""
     from src.db import get_conn
     with get_conn() as conn:
         ciks = [r[0] for r in conn.execute(
             "SELECT cik FROM companies WHERE cik IS NOT NULL ORDER BY cik")]
+
+    failed: dict[int, list] = {}
     for cik in ciks:
         panel = api.get_segment_panel(cik, years=5)
         for _, period_end in panel.periods:
-            assert panel.reconciles(period_end, "revenue") is True, \
-                f"cik {cik} period {period_end} does not reconcile"
+            if panel.reconciles(period_end, "revenue") is not True:
+                failed.setdefault(cik, []).append(period_end)
+
+    unexpected = {c: p for c, p in failed.items() if c not in NON_RECONCILING}
+    assert not unexpected, (
+        f"segment revenue stopped reconciling for {unexpected}. If that is a "
+        f"real filer behaviour rather than a regression, add it to "
+        f"NON_RECONCILING with the disclosure fact that explains it")
+
+    stale = [c for c in NON_RECONCILING if c in ciks and c not in failed]
+    assert not stale, (
+        f"{stale} now reconcile, so their NON_RECONCILING entries are stale. "
+        f"Remove them rather than letting the list rot into a carve-out")

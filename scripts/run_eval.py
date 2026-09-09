@@ -31,6 +31,8 @@ def main() -> int:
     ap.add_argument("--question", help="run one question by id")
     ap.add_argument("--show", action="store_true",
                     help="print the retrieved chunks for each question")
+    ap.add_argument("--per-entity", type=int,
+                    help="Audit R4: at most this many chunks from any one filer")
     ap.add_argument("--min-hit-rate", type=float,
                     help="exit non-zero if hit@detail falls below this")
     args = ap.parse_args()
@@ -41,7 +43,7 @@ def main() -> int:
         if not questions:
             raise SystemExit(f"no question with id {args.question!r}")
 
-    report = run_eval(questions, k=args.k)
+    report = run_eval(questions, k=args.k, per_entity=args.per_entity)
     print(report.render(k_detail=args.detail))
 
     if args.show:

@@ -163,12 +163,27 @@ def _words_to_number(text: str) -> Decimal:
     return Decimal(total + current)
 
 
+#: Every dash a filer may print to mean "nothing here". The ASCII hyphen was
+#: the only one recognised until Oracle FY2022/FY2023 turned up printing em
+#: dashes under ixt:zerodash -- 112 and 134 facts respectively, every one of
+#: them a real zero, and the whole filing failed to parse over it. Same family
+#: of bug as U+2212 on a GBK console: the intent was right and the character
+#: set was too narrow.
+DASHES = "-‐‑‒–—―−"
+
+#: Transformation rules whose displayed text means zero regardless of glyph.
+#: `zerodash` is the SEC registry's name for "a dash printed here is a zero";
+#: `nocontent` is an empty element meaning the same.
+ZERO_RULES = frozenset({"fixed-zero", "fixed-none", "zerodash", "nocontent"})
+
+
 def parse_number(text: str, fmt: str | None = None) -> Decimal:
     """Displayed text -> Decimal, honouring the ix transformation rule."""
     rule = (fmt or "").rsplit(":", 1)[-1]
+    if rule in ZERO_RULES:
+        return Decimal(0)
     if rule.startswith("fixed-"):
-        return {"fixed-zero": Decimal(0), "fixed-one": Decimal(1),
-                "fixed-none": Decimal(0)}.get(rule, Decimal(0))
+        return {"fixed-one": Decimal(1)}.get(rule, Decimal(0))
     if rule == "numwordsen":
         return _words_to_number(text.strip())
 
@@ -181,7 +196,7 @@ def parse_number(text: str, fmt: str | None = None) -> Decimal:
         s = s.replace(".", "").replace(",", ".")
     else:
         s = s.replace(",", "")
-    if not s or s == "-":
+    if not s or all(ch in DASHES for ch in s):
         return Decimal(0)
     value = Decimal(s)
     return -value if negative else value

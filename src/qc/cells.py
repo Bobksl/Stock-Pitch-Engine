@@ -72,6 +72,92 @@ OPS: dict[str, tuple[int | None, Any]] = {
 }
 
 
+# --------------------------------------------------------------------------
+# The SERIES operation vocabulary (spec 6.4, v1.5).
+#
+# 2.4's peer drawdown analysis is the first thing in the framework that is not
+# arithmetic over two scalars, and all three existing routes fail it. Prices
+# are not in XBRL, so these cannot be facts. A drawdown is not expressible in
+# the vocabulary above, so they could not be model cells as it stood. And
+# storing a computed statistic in an external record would RECORD it rather
+# than recompute it -- a wrong drawdown recorded faithfully would verify clean,
+# which is the hole 6.4 exists to close.
+#
+# So a second closed vocabulary, kept separate from the first rather than
+# merged into it: a caller reading OPS still sees only arithmetic, and a
+# `ratio` over two price series -- a type confusion that happens to produce a
+# number -- is refused rather than computed.
+#
+# The measurement window lives in the input declaration (`from` / `to`), so a
+# statistic states the period it was measured over instead of implying it, and
+# every op below is a pure function of the slices it is handed.
+# --------------------------------------------------------------------------
+
+def _series_max_drawdown(series):
+    from src.pitch.drawdown import max_drawdown
+    return max_drawdown(series)[0]
+
+
+def _series_recovery_days(window, forward):
+    """Days from the WINDOW's trough back to the WINDOW's peak price.
+
+    Two series, deliberately. The first defines which drawdown is being
+    measured; the second is searched forward for the recovery, and runs past
+    the window's end because how long a peer took to regain its peak is a
+    property of that peer, not of the benchmark's calendar.
+
+    One series cannot express this. Handed only the window, a peer slower than
+    the market reads as never recovering; handed only an extended slice, the op
+    recomputes a different peak and trough and answers about a different
+    drawdown entirely. Both were live: bounding at the benchmark reported AMD
+    and MRVL as unrecovered from 2022, and extending the single slice moved
+    AVGO from 215 days to 59 by silently measuring the 2025 drawdown instead.
+    """
+    from src.pitch.drawdown import max_drawdown, recovery_date
+    _, peak, trough = max_drawdown(window)
+    recovered = recovery_date(forward, peak, trough)
+    if recovered is None:
+        raise CellError(
+            "the drawdown is not recovered by the end of the price history, so "
+            "there is no recovery time to cite. Reporting zero would invert "
+            "the reading")
+    return Decimal((recovered - trough).days)
+
+
+def _series_downside_capture(peer, benchmark):
+    from src.pitch.drawdown import DrawdownError, downside_capture
+    try:
+        return downside_capture(peer[-1][1] / peer[0][1] - 1,
+                                benchmark[-1][1] / benchmark[0][1] - 1)
+    except DrawdownError as exc:
+        raise CellError(str(exc)) from None
+
+
+def _series_correlation(peer, benchmark):
+    from src.pitch.drawdown import DrawdownError, correlation
+    try:
+        return correlation(peer, benchmark)
+    except DrawdownError as exc:
+        raise CellError(str(exc)) from None
+
+
+def _series_beta(peer, benchmark):
+    from src.pitch.drawdown import DrawdownError, stress_beta
+    try:
+        return stress_beta(peer, benchmark)
+    except DrawdownError as exc:
+        raise CellError(str(exc)) from None
+
+
+SERIES_OPS: dict[str, tuple[int, Any]] = {
+    "max_drawdown": (1, _series_max_drawdown),
+    "recovery_days": (2, _series_recovery_days),
+    "downside_capture": (2, _series_downside_capture),
+    "correlation": (2, _series_correlation),
+    "stress_beta": (2, _series_beta),
+}
+
+
 @dataclass(frozen=True)
 class CellResult:
     """A recomputed value and the facts it was computed from."""
@@ -81,13 +167,18 @@ class CellResult:
     unit: str
     inputs: tuple[Fact, ...] = ()
     op: str = ""
+    #: Citations for series inputs, which are not Facts: one line per declared
+    #: series, naming the instrument, its window and where the prices came from.
+    series: tuple[str, ...] = ()
 
     @property
     def citation(self) -> str:
-        """A model cell cites its formula and every fact underneath it."""
-        head = f"model:{self.name} = {self.op}(" + ", ".join(
-            f.concept for f in self.inputs) + ")"
-        return head + "".join(f"\n        <- {f.citation}" for f in self.inputs)
+        """A model cell cites its formula and everything underneath it."""
+        parts = [f.concept for f in self.inputs] + list(self.series)
+        head = f"model:{self.name} = {self.op}(" + ", ".join(parts) + ")"
+        return (head
+                + "".join(f"\n        <- {f.citation}" for f in self.inputs)
+                + "".join(f"\n        <- prices:{s}" for s in self.series))
 
 
 @dataclass
@@ -129,10 +220,14 @@ class CellRegistry:
         if not isinstance(decl, dict) or "op" not in decl:
             raise CellError(f"model cell {name!r}: an 'op' is required")
         op_name = decl["op"]
-        if op_name not in OPS:
+        if op_name not in OPS and op_name not in SERIES_OPS:
             raise CellError(
-                f"model cell {name!r}: unknown op {op_name!r}; "
-                f"the vocabulary is {sorted(OPS)}")
+                f"model cell {name!r}: unknown op {op_name!r}; the "
+                f"vocabularies are {sorted(OPS)} over scalars and "
+                f"{sorted(SERIES_OPS)} over series")
+
+        if op_name in SERIES_OPS:
+            return self._compute_series(name, decl, op_name)
 
         arity, fn = OPS[op_name]
         raw_inputs = decl.get("inputs") or []
@@ -167,6 +262,67 @@ class CellRegistry:
         self._cache[name] = result
         return result
 
+    def _compute_series(self, name: str, decl: dict, op_name: str) -> CellResult:
+        """A series-valued derived figure (6.4, v1.5).
+
+        Kept on its own path rather than folded into the scalar one: the input
+        form differs, the arity check differs, and mixing them would let a
+        `ratio` over two price series through as a type confusion that happens
+        to produce a number.
+        """
+        arity, fn = SERIES_OPS[op_name]
+        refs = decl.get("inputs") or []
+        if not isinstance(refs, list) or len(refs) != arity:
+            raise CellError(
+                f"model cell {name!r}: {op_name} takes {arity} series input(s), "
+                f"got {len(refs) if isinstance(refs, list) else refs!r}")
+
+        series_args, citations = [], []
+        for ref in refs:
+            if not isinstance(ref, dict) or "series" not in ref:
+                raise CellError(
+                    f"model cell {name!r}: {op_name} needs a series input "
+                    f"{{series, from, to}}, got {ref!r}")
+            series_args.append(self._resolve_series(name, ref))
+            citations.append(_series_citation(ref))
+
+        try:
+            value = fn(*series_args)
+        except CellError:
+            raise
+        except (InvalidOperation, DivisionByZero, ZeroDivisionError) as exc:
+            raise CellError(f"model cell {name!r}: {op_name} failed: {exc}") from None
+
+        if quantum := decl.get("quantize"):
+            value = value.quantize(Decimal(str(quantum)))
+
+        result = CellResult(name=name, value=value, unit=decl.get("unit", "pure"),
+                            op=op_name, series=tuple(citations))
+        self._cache[name] = result
+        return result
+
+    def _resolve_series(self, owner: str, ref: dict) -> list:
+        """A declared price window, read from the local prices table.
+
+        The window is part of the DECLARATION, so a statistic states the period
+        it was measured over rather than implying it, and two cells over
+        different windows are visibly different cells.
+        """
+        from src.ingest.prices import get_closes
+
+        for field_name in ("from", "to"):
+            if ref.get(field_name) is None:
+                raise CellError(
+                    f"model cell {owner!r}: a series input needs {field_name!r}; "
+                    f"a statistic without its window states nothing")
+        start, end = _as_date(ref["from"]), _as_date(ref["to"])
+        rows = get_closes(ref["series"], start, end)
+        if not rows:
+            raise CellError(
+                f"model cell {owner!r}: no prices for {ref['series']} between "
+                f"{start} and {end}")
+        return rows
+
     def _resolve_input(self, owner: str, ref: Any) -> tuple[Decimal, Fact | None]:
         """A cell input is a fact reference, another cell, or a declared literal."""
         if isinstance(ref, dict) and "cell" in ref:
@@ -200,7 +356,23 @@ class CellRegistry:
                     f"cik={ref['cik']} period_end={period_end} "
                     f"segments={ref.get('segments') or {}}")
             return fact.value, fact
+        if isinstance(ref, dict) and "series" in ref:
+            raise CellError(
+                f"model cell {owner!r}: a series input is only legal for the "
+                f"series ops {sorted(SERIES_OPS)}; a scalar op over a price "
+                f"series is a type confusion that happens to produce a number")
         raise CellError(
             f"model cell {owner!r}: an input must be a fact reference "
             f"(cik/concept/period_end), {{cell: name}}, {{external: key}}, "
             f"or {{literal, note}}")
+
+
+def _as_date(value: Any) -> date:
+    return date.fromisoformat(value) if isinstance(value, str) else value
+
+
+def _series_citation(ref: dict) -> str:
+    """What a series input cites: instrument, window, and where it came from."""
+    return (f"{ref['series']} {_as_date(ref['from'])}..{_as_date(ref['to'])}"
+            f" | {ref.get('source', 'moomoo')}"
+            f" | {ref.get('adjustment', 'forward')}-adjusted")

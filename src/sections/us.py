@@ -61,6 +61,22 @@ RANK = {item: i for i, item in enumerate(ORDER)}
 # which is a build error rather than a document quirk.
 REQUIRED = ("1", "1A", "7", "7A", "8")
 
+# Items that must be PRESENT but may legitimately be near-empty.
+#
+# Item 8 is routinely satisfied by cross-reference -- "the information required
+# by this item is included in this Annual Report on pages F-1 through F-27" --
+# because the financial statements sit in an F-page appendix outside the Item
+# structure entirely. Qualcomm writes exactly that, in 152 characters; its own
+# FY2021 filing writes the same cross-reference in 363 and passed only because
+# it was wordier. A rule whose outcome turns on the verbosity of a pointer is
+# not measuring anything.
+#
+# Nothing upstream reads Item 8 prose: figures come from the inline-XBRL
+# instance (P2), and 1.2 and 2.2 take their narrative from Items 1, 1A and 7.
+# So Item 8 must still ANCHOR -- its absence would still mean the anchors are
+# wrong -- but its span length is not evidence about anything.
+THIN_ALLOWED = ("8",)
+
 ITEM_RE = re.compile(r"(?im)^[ \t]*item[ \t ]*(\d{1,2}[ABC]?)[ \t]*[.:\-–—]?[ \t]*(.{0,80})")
 
 TOC_MAX_GAP = 300           # consecutive TOC entries sit a line or two apart
@@ -180,7 +196,8 @@ def _assert_usable(sections: list[Section]) -> None:
         raise SegmentationError("Item anchors are not in document order")
 
     thin = [s.section_key for s in sections
-            if s.item in REQUIRED and s.length < MIN_SECTION_CHARS]
+            if s.item in REQUIRED and s.item not in THIN_ALLOWED
+            and s.length < MIN_SECTION_CHARS]
     if thin:
         raise SegmentationError(f"required Items resolved to near-empty spans: {thin}")
 

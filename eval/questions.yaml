@@ -347,3 +347,68 @@ questions:
       - {ticker: AMD, fiscal_year: any, section_key: item_7}
       - {ticker: AMD, fiscal_year: any, section_key: item_1}
     note: unfiltered — two filers are legitimately relevant
+
+  # -- Cross-company panel questions (P3.4, Audit R4) -----------------------
+  #
+  # Section 2 asks how the comp set's own filings describe the same industry,
+  # and the disagreements are the signal. That retrieval pattern was measured
+  # by TWO questions before these were added, which cannot evaluate a panel
+  # retriever. All of them are deliberately unfiltered and every gold label
+  # below was read out of the retrieved chunk, not assumed.
+  #
+  # Three further candidates were probed and DROPPED rather than labelled
+  # optimistically: customer concentration (only NVDA item_1a surfaces, so it
+  # is not cross-company), China concentration (duplicates
+  # cross_export_controls), and engineering talent (retrieval returns
+  # competition passages instead, and the human-capital text was not confirmed
+  # present). A gold label nobody checked is worse than a question nobody asked.
+
+  - id: cross_foundry_dependence
+    question: Which companies rely on third-party foundries to manufacture their semiconductor products?
+    gold:
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+    note: >-
+      R4 panel. AMD "we utilize third-party wafer foundries", NVDA "we depend on
+      foundries" — the same structural dependency in two filers' own words.
+
+  - id: cross_competition_described
+    question: How do these companies describe the competitive landscape and their principal competitors?
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1}
+      - {ticker: AAPL, fiscal_year: any, section_key: item_1}
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1}
+    note: >-
+      R4 panel, four filers. Feeds 2.5c: what firms say they compete ON is what
+      separates price rivalry from feature rivalry, and the four describe it
+      differently.
+
+  - id: cross_third_party_manufacturing_risk
+    question: Which companies discuss supply constraints or reliance on third-party manufacturing and assembly?
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_1a}
+      - {ticker: AMD, fiscal_year: any, section_key: item_1a}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1a}
+    note: R4 panel. One risk, three filers, three different exposures to it.
+
+  - id: cross_gross_margin_drivers
+    question: What do companies say drives changes in gross margin and product mix?
+    gold:
+      - {ticker: AAPL, fiscal_year: any, section_key: item_7}
+      - {ticker: NVDA, fiscal_year: any, section_key: item_7}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_7}
+    note: >-
+      R4 panel, all in MD&A. The closest thing in the labelled set to the 2.4
+      industry panel itself: the same line item explained by three filers.
+
+  - id: cross_ai_strategy
+    question: How do these companies describe artificial intelligence as a driver of their business?
+    gold:
+      - {ticker: NVDA, fiscal_year: any, section_key: item_7}
+      - {ticker: AMD, fiscal_year: any, section_key: item_1}
+      - {ticker: MSFT, fiscal_year: any, section_key: item_1a}
+    note: >-
+      R4 panel. Labelled as what it actually retrieves — AI as a business driver
+      across three filers — not as the AI-capex question first drafted, which
+      the corpus does not answer.
