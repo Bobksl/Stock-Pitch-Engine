@@ -15,6 +15,13 @@
 # Tiers go to different consumers (2.3): direct competitors to the 2.5
 # structural analysis, valuation references to section 4 comps. Both appear in
 # the 2.4 panel, which covers every comp-set member.
+#
+# READ AND APPROVED BY THE OWNER, 2026-09-10. The justifications below were
+# drafted by the agent that built phase 3 and stood unreviewed until that date.
+# The distinction is worth recording because 2.3 requires a human approval and
+# the code refuses a member without one -- which means an unreviewed placeholder
+# and a real approval look identical to the gate. Only the file can tell them
+# apart, so it says which this is.
 
 members:
   - ticker: MRVL
@@ -26,7 +33,7 @@ members:
       decision, competing for the same sockets at comparable scale. The closest
       direct competitor Broadcom has.
     approved_by: Bob Liang
-    approved_on: 2026-09-09
+    approved_on: 2026-09-10
 
   - ticker: NVDA
     cik: 1045810
@@ -38,7 +45,7 @@ members:
       valuation reference, because a roughly tenfold size gap and a different
       margin structure is exactly the 10x gap 2.3 says disqualifies one.
     approved_by: Bob Liang
-    approved_on: 2026-09-09
+    approved_on: 2026-09-10
 
   - ticker: AMD
     cik: 2488
@@ -48,7 +55,7 @@ members:
       Data-centre compute sold into the same buying decision at comparable
       scale, with a similar fabless capital profile.
     approved_by: Bob Liang
-    approved_on: 2026-09-09
+    approved_on: 2026-09-10
 
   - ticker: IBM
     cik: 51143
@@ -59,7 +66,7 @@ members:
       maintenance economics as VMware and CA. A valuation reference and not a
       direct competitor: it does not compete for the same customer decision.
     approved_by: Bob Liang
-    approved_on: 2026-09-09
+    approved_on: 2026-09-10
 
   - ticker: QCOM
     cik: 804328
@@ -72,7 +79,7 @@ members:
       NOTE its September fiscal year end, and that its segment revenue does not
       sum to its consolidated total, so it is a consolidated-panel peer only.
     approved_by: Bob Liang
-    approved_on: 2026-09-09
+    approved_on: 2026-09-10
 
   - ticker: ORCL
     cik: 1341439
@@ -83,7 +90,7 @@ members:
       economics VMware runs on, at comparable scale. Second software comparator
       so that half of a CONTESTED type field does not rest on IBM alone.
     approved_by: Bob Liang
-    approved_on: 2026-09-09
+    approved_on: 2026-09-10
 
 structural_conclusion: >-
   Rivalry runs on design wins and roadmap timing rather than on price, so
