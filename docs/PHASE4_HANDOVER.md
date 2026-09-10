@@ -141,6 +141,27 @@ capital needs stockholders' equity and `concept_map.yaml` maps none. If Section 
 accounting-quality screen (§5.7a) needs balance-sheet concepts, add them there — it is a
 reviewable diff, and the map is the only place tag resolution lives.
 
+**One booby trap in that map, found 2026-09-10 and deliberately left unfixed.** The
+`depreciation_amortisation` concept resolves for only three of the seven comp-set names.
+The other four tag this instead:
+
+```
+AVGO:  Depreciation (n=90)      IBM:   Depreciation (n=158)
+ORCL:  Depreciation (n=168)     MRVL:  OtherDepreciationAndAmortization (n=52)
+```
+
+**Do not add `us-gaap:Depreciation` to that concept.** Depreciation is not D&A. For Broadcom
+in particular, amortisation of acquired intangibles from VMware, CA and Symantec is enormous,
+so depreciation alone as an EBITDA add-back understates EBITDA badly and yields an EV/EBITDA
+that looks entirely plausible and is wrong — then gets compared across the panel and
+believed. That is the failure class this whole project exists to prevent, and it is one
+tempting line away.
+
+The honest treatment is a modelling decision rather than a mapping tweak: D&A for EBITDA is
+depreciation **plus** amortisation of intangibles, or the cash-flow-statement line where a
+filer tags it. It belongs with §4.8 in Phase 5, tested on Broadcom, where the intangibles are
+large enough that a wrong answer is obvious.
+
 ### The rules that will bite in Phase 4 specifically
 
 Phase 3 wrote the first rules about *prose*. Phase 4 writes the first rules about *agreement
@@ -176,17 +197,37 @@ does §3.2's Step 0 read, how does C1 check the type field against what Section 
 what stops a stale artifact being read as current. `primer.py` solves a near-identical
 problem with content addressing and an expiry that blocks — read it before designing.
 
-**2. Consensus estimates (Audit G3).** §3.5 variant perception is *"definitionally
-impossible"* without them, and the Audit calls this the hardest dependency to replace.
-Bloomberg BEst is the owner's source and licensed. **Verified this session against the live
-moomoo gateway:** `get_research_analyst_consensus.py US.AVGO` returns consensus rating,
-analyst count, rating distribution and target prices (high 630 / average 528 / low 400,
-28 analysts, updated 2026-09-09). **Also verified: it does NOT return forward revenue or EPS
-estimates by year**, which is what §3.5 actually asks for — the earnings endpoints return
-price behaviour and IV crush, not estimates. So G3 is *partly* closed: the target-price
-consensus is real, free of the Bloomberg dependency, and directly usable for §4.9's upside
-comparison; the forward-estimate consensus is not covered and needs a decision. Verify
-anything you rely on before building on it, with OpenD running.
+**2. Consensus estimates (Audit G3) — and the one thing worth asking Bloomberg for.**
+§3.5 variant perception is *"definitionally impossible"* without consensus, and the Audit
+calls this the hardest dependency in the framework to replace.
+
+**Verified against the live moomoo gateway, 2026-09-10:**
+`get_research_analyst_consensus.py US.AVGO` returns consensus rating, analyst count, rating
+distribution and target prices — high 630 / average 528 / low 400 across 28 analysts,
+updated 2026-09-09. **Also verified: it does NOT return forward revenue or EPS estimates by
+fiscal year**, which is what §3.5 actually asks for; the earnings endpoints return price
+behaviour and IV crush, not estimates.
+
+So G3 is **partly** closed. The target-price consensus is real, carries no Bloomberg
+dependency, and is directly usable for §4.9's upside comparison. The forward-estimate
+consensus is not covered by anything the project has, and that is the gap Phase 4 has to
+decide about.
+
+**The AVGO RV comps re-pull was cancelled on 2026-09-10, and this is why it matters here.**
+That export was the standing Bloomberg ask, and three of the four things it existed to
+supply are now better answered without it: comp-set membership (it was a 2-year correlation
+screen — GOOGL, AMZN, META, PLTR, Samsung — not a comp set, and there is now an approved
+§2.3 set), the missing growth column, and the missing profitability column. Its currency
+mixing and its calendarisation against an October fiscal year end are moot for the same
+reason. Checked on the live corpus: revenue, net income, diluted shares, cash and long-term
+debt are present for all seven names and operating income for six, so **enterprise value is
+computable** from facts plus moomoo prices, and EV/Sales, EV/EBIT and P/E with it — every
+figure a recomputed model cell rather than a stored external record, which is the difference
+§6.4 exists to enforce.
+
+**If you want one thing from Bloomberg, ask for BEst forward revenue and EPS by fiscal year
+for the six approved comp-set members.** That closes G3. A re-pulled RV screen carrying
+trailing multiples on the wrong companies does not.
 
 **3. Boilerplate outranks substance.** Deferred through two phases and now due: the
 safe-harbour paragraph beats real risk disclosure in retrieval, which threatens §5.7b's Item
@@ -227,9 +268,12 @@ PDF carries "Not for redistribution."
 
 - **Beta complete and correct** — raw 1.818, 5y weekly vs SPX, 260 points. Use RAW; the code
   applies Blume and Bloomberg's "Adjusted 1.545" is already Blume.
-- **Still blocked**: the RV comps export has finished multiples but no growth and no
-  profitability column, so §4.8's regression and growth-adjusted cross-check are both
-  uncomputable. A re-pull was promised and has not arrived. Needed for §4.8, not for Phase 4.
+- **The RV comps export is retired.** It had finished multiples but no growth and no
+  profitability column, and it was a 2-year correlation screen rather than a comp set. A
+  re-pull was promised for months and was **cancelled on 2026-09-10**: the approved §2.3 comp
+  set replaces its membership, and growth, profitability and enterprise value are all
+  computable from EDGAR facts plus the local price table, in USD, calendar-aligned. Do not
+  reinstate it. See design fork 2 for the ask that replaced it.
 - ECFC gives **real** GDP only (2.1%). Terminal growth must be derived nominal (~4.4%) and
   declared as such, or it is Audit defect 4 verbatim.
 
